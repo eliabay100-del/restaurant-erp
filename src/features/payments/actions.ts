@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { authorize, FLOOR_ROLES, ALL_ROLES } from '@/lib/auth';
 import { parseMoney, roundMoney } from '@/lib/money';
 import type { Prisma, Payment } from '@prisma/client';
+import { emitOutboundEvent } from '@/lib/integrations/outbox';
 
 const PAYMENT_METHODS = ['CASH', 'CARD', 'MOBILE'] as const;
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
@@ -89,6 +90,18 @@ export async function processPayment(
     if (!fullOrder) {
       return { success: false, error: 'Order not found after payment' };
     }
+
+    await emitOutboundEvent(prisma, 'payment.completed', payment.id, {
+      orderId,
+      paymentId: payment.id,
+      method,
+      amountPaid: tendered,
+      amountDue,
+      changeGiven,
+      reference: reference ?? null,
+      verifiedAt: new Date().toISOString(),
+      staffId: auth.session.staffId,
+    });
 
     return { success: true, payment, order: fullOrder };
   } catch (error) {

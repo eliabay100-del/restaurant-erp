@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { authorize, ALL_ROLES, FLOOR_ROLES, MANAGEMENT_ROLES } from '@/lib/auth';
 import { TAX_RATE, computeOrderTotals, parseMoney, roundMoney } from '@/lib/money';
+import { emitOutboundEvent } from '@/lib/integrations/outbox';
 import {
   ACTIVE_ORDER_STATUSES,
   ORDER_STATUSES,
@@ -169,6 +170,22 @@ export async function createOrder(input: CreateOrderInput) {
       },
     });
 
+    await emitOutboundEvent(prisma, 'order.created', order.id, {
+      orderId: order.id,
+      orderNumber,
+      type: input.type,
+      status: 'PENDING',
+      tableNumber: input.tableNumber ?? null,
+      subtotal,
+      taxRate,
+      taxAmount,
+      discount: appliedDiscount,
+      total,
+      staffId,
+      shiftId,
+      createdAt: order.createdAt ?? new Date().toISOString(),
+    });
+
     return { success: true, order };
   } catch (error) {
     console.error('Create order error:', error);
@@ -201,6 +218,12 @@ export async function updateOrderStatus(orderId: number, status: string) {
         items: true,
         staff: { select: { name: true, nameAm: true } },
       },
+    });
+
+    await emitOutboundEvent(prisma, 'order.status.changed', orderId, {
+      orderId,
+      newStatus: status,
+      updatedAt: new Date().toISOString(),
     });
 
     return { success: true, order };

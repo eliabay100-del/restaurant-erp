@@ -273,3 +273,23 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
 }
+
+// ============ INTEGRATIONS (outbox + API access) ============
+
+model OutboundEvent {
+  id            Int       @id @default(autoincrement())
+  kind          String
+  aggregateId   Int?
+  payload       String
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  lastError     String?
+  nextAttemptAt DateTime  @default(now())
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([kind])
+  @@index([createdAt])
+}
