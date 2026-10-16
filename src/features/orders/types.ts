@@ -23,6 +23,15 @@ export interface OrderView {
   status: string;
   tableNumber: string | null;
   note: string | null;
+  /**
+   * Stored bill total, including VAT and any discount. Never recompute this
+   * from the items: item rows only carry unit price, so a sum of them is the
+   * pre-VAT subtotal and would disagree with what the server charges.
+   */
+  total: number;
+  subtotal?: number;
+  taxAmount?: number;
+  discount?: number;
   createdAt: string | Date;
   updatedAt: string | Date;
   staff: { name: string; nameAm: string | null; role?: string };

@@ -36,6 +36,7 @@ interface MenuItem {
 
 export default function CashierPage() {
   const t = useTranslations('pos');
+  const tp = useTranslations('payment');
   const locale = useLocale();
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -50,6 +51,7 @@ export default function CashierPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
   const [paymentTotal, setPaymentTotal] = useState<number>(0);
+  const [paymentIsNewOrder, setPaymentIsNewOrder] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   const items = useCartStore((s) => s.items);
@@ -121,29 +123,67 @@ export default function CashierPage() {
     if (result.success && result.order) {
       setCurrentOrderId(result.order.id);
       setPaymentTotal(getTotal());
+      setPaymentIsNewOrder(true);
       setShowPayment(true);
     }
     setLoading(false);
   };
 
+  // Order first: create the order and send it to the kitchen WITHOUT taking
+  // payment. It stays in the "Unpaid" list until the cashier settles it.
+  const handleSendToKitchen = async () => {
+    if (items.length === 0) return;
+    setLoading(true);
+
+    const result = await createOrder({
+      type: orderType,
+      tableNumber: tableNumber || undefined,
+      note: orderNote || undefined,
+      discount: discount > 0 ? discount : undefined,
+      items: items.map((item) => ({
+        menuItemId: item.menuItemId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        note: item.note,
+        overridePrice: item.overridePrice,
+      })),
+    });
+
+    if (result.success && result.order) {
+      emit('order:new', { orderId: result.order.id, orderType, tableNumber });
+      clearCart();
+      fetchUnpaidOrders();
+      setSuccessMsg(t('orderSent'));
+      setTimeout(() => setSuccessMsg(''), 3000);
+    }
+    setLoading(false);
+  };
+
   const handlePayExistingOrder = (order: OrderView) => {
-    const total = order.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    // Use the stored bill total (VAT included) — an item sum is the pre-VAT
+    // subtotal and would be rejected as an underpayment by the server.
     setCurrentOrderId(order.id);
-    setPaymentTotal(total);
+    setPaymentTotal(order.total);
+    setPaymentIsNewOrder(false);
     setShowPayment(true);
   };
 
   const handlePaymentComplete = () => {
     setShowPayment(false);
     emit('order:new', { orderId: currentOrderId, orderType, tableNumber });
-    clearCart();
     setCurrentOrderId(null);
     setPaymentTotal(0);
 
-    fetchUnpaidOrders();
+    // Paying an order that was already on the floor must not wipe the cart
+    // the cashier is currently building.
+    const wasNewOrder = paymentIsNewOrder;
+    setPaymentIsNewOrder(false);
 
-    const isNewOrder = paymentTotal === getTotal() && items.length > 0;
-    setSuccessMsg(isNewOrder ? t('orderPlaced') : 'Payment Confirmed & Accepted');
+    if (wasNewOrder) clearCart();
+    fetchUnpaidOrders();
+    fetchReadyOrders();
+
+    setSuccessMsg(wasNewOrder ? t('orderPlaced') : tp('paymentSuccess'));
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
@@ -159,14 +199,14 @@ export default function CashierPage() {
               onClick={() => setActiveView('MENU')}
               style={{ flex: 1, borderRadius: 'var(--radius-full)' }}
             >
-              <Icon name="bookOpen" size={16} /> Menu
+              <Icon name="bookOpen" size={16} /> {t('menu')}
             </button>
             <button 
               className={`btn ${activeView === 'ORDERS' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => { setActiveView('ORDERS'); fetchUnpaidOrders(); }}
               style={{ flex: 1, borderRadius: 'var(--radius-full)', position: 'relative' }}
             >
-              <Icon name="coins" size={16} /> Unpaid
+              <Icon name="coins" size={16} /> {t('unpaid')}
               {unpaidOrders.length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--danger)', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
                   {unpaidOrders.length}
@@ -178,7 +218,7 @@ export default function CashierPage() {
               onClick={() => { setActiveView('READY'); fetchReadyOrders(); }}
               style={{ flex: 1, borderRadius: 'var(--radius-full)', position: 'relative', borderColor: activeView === 'READY' ? 'var(--accent-gold)' : 'var(--success)', color: activeView === 'READY' ? 'white' : 'var(--success)' }}
             >
-              <Icon name="bell" size={16} /> Ready
+              <Icon name="bell" size={16} /> {t('ready')}
               {readyOrders.length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--danger)', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
                   {readyOrders.length}
@@ -203,15 +243,15 @@ export default function CashierPage() {
 
           {activeView === 'ORDERS' && (
             <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-4)' }}>Unpaid Orders</h2>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-4)' }}>{t('unpaidOrders')}</h2>
               {loadingOrders ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>Loading...</div>
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>{t('loadingOrders')}</div>
               ) : unpaidOrders.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>No unpaid orders.</div>
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>{t('noUnpaidOrders')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
                   {unpaidOrders.map(order => {
-                    const total = order.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+                    const total = order.total;
                     return (
                       <div key={order.id} className="glass-card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -222,7 +262,7 @@ export default function CashierPage() {
                             </div>
                           </div>
                           <div style={{ background: 'var(--bg-input)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', fontSize: '0.8125rem', fontWeight: 600 }}>
-                            {order.type === 'DINE_IN' ? `Table ${order.tableNumber}` : 'Takeout'}
+                            {order.type === 'DINE_IN' ? t('table', { number: order.tableNumber ?? '' }) : t('takeout')}
                           </div>
                         </div>
                         
@@ -244,7 +284,7 @@ export default function CashierPage() {
                             {formatPrice(total, locale)}
                           </span>
                           <button className="btn btn-primary btn-sm" onClick={() => handlePayExistingOrder(order)}>
-                            Pay Now
+                            {t('payNow')}
                           </button>
                         </div>
                       </div>
@@ -257,9 +297,9 @@ export default function CashierPage() {
 
           {activeView === 'READY' && (
             <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-4)' }}>Ready to Serve</h2>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-4)' }}>{t('readyToServe')}</h2>
               {readyOrders.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>No orders waiting for pickup.</div>
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>{t('noReadyOrders')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
                   {readyOrders.map(order => (
@@ -272,11 +312,11 @@ export default function CashierPage() {
                           </div>
                         </div>
                         <div style={{ background: 'var(--success)', color: 'white', padding: '4px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', fontWeight: 600 }}>
-                          {order.type === 'DINE_IN' ? `Table ${order.tableNumber}` : 'Takeout'}
+                          {order.type === 'DINE_IN' ? t('table', { number: order.tableNumber ?? '' }) : t('takeout')}
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                        <Icon name="user" size={14} /> Ordered by: {getLocaleName(order.staff.name, order.staff.nameAm, locale)}
+                        <Icon name="user" size={14} /> {t('orderedBy')} {getLocaleName(order.staff.name, order.staff.nameAm, locale)}
                       </div>
                       <div style={{ marginTop: 'var(--space-2)' }}>
                         <ul style={{ paddingLeft: '20px', fontSize: '0.875rem', margin: 0 }}>
@@ -291,10 +331,11 @@ export default function CashierPage() {
                           const result = await updateOrderStatus(order.id, 'SERVED');
                           if (result.success) {
                             fetchReadyOrders();
+                            fetchUnpaidOrders();
                             emit('order:status-update', { orderId: order.id, status: 'SERVED' });
                           }
                         }}>
-                          <Icon name="menu" size={16} /> Mark Served
+                          <Icon name="menu" size={16} /> {t('markServed')}
                         </button>
                       </div>
                     </div>
@@ -307,7 +348,7 @@ export default function CashierPage() {
 
         {/* Right Panel - Order */}
         <OrderPanel
-          onPlaceOrder={handlePayNewOrder}
+          onPlaceOrder={handleSendToKitchen}
           onPay={handlePayNewOrder}
           loading={loading}
         />

@@ -230,17 +230,28 @@ export default function OrderPanel({ onPlaceOrder, onPay, loading, isWaiter }: O
             onClick={onPlaceOrder}
             style={{ flex: 1, background: 'var(--accent-gold)' }}
           >
-            {loading ? tc('loading') : (orderType === 'DINE_IN' && !tableNumber && items.length > 0) ? (<><Icon name="alertTriangle" size={18} /> Select a Table</>) : (<><Icon name="kitchen" size={18} /> Send to Kitchen</>)}
+            {loading ? tc('loading') : (orderType === 'DINE_IN' && !tableNumber && items.length > 0) ? (<><Icon name="alertTriangle" size={18} /> Select a Table</>) : (<><Icon name="kitchen" size={18} /> {t('sendToKitchen')}</>)}
           </button>
         ) : (
-          <button
-            className="btn btn-primary btn-xl w-full"
-            disabled={items.length === 0 || loading}
-            onClick={onPay}
-            style={{ flex: 1 }}
-          >
-            {loading ? tc('loading') : (<><Icon name="coins" size={18} /> {t('pay')} — {formatPrice(getTotal(), locale)}</>)}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', flex: 1 }}>
+            {/* Order first: send to the kitchen without taking payment. */}
+            <button
+              className="btn btn-primary btn-xl"
+              disabled={items.length === 0 || loading || (orderType === 'DINE_IN' && !tableNumber)}
+              onClick={onPlaceOrder}
+              style={{ flex: 1, background: 'var(--accent-gold)' }}
+            >
+              {loading ? tc('loading') : (orderType === 'DINE_IN' && !tableNumber && items.length > 0) ? (<><Icon name="alertTriangle" size={18} /> Select a Table</>) : (<><Icon name="kitchen" size={18} /> {t('sendToKitchen')}</>)}
+            </button>
+            {/* Or settle immediately (walk-in / takeout). */}
+            <button
+              className="btn btn-secondary btn-lg w-full"
+              disabled={items.length === 0 || loading}
+              onClick={onPay}
+            >
+              <Icon name="coins" size={18} /> {t('pay')} — {formatPrice(getTotal(), locale)}
+            </button>
+          </div>
         )}
       </div>
     </div>

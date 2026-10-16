@@ -155,17 +155,17 @@ export default function KitchenPage() {
           <h1 style={{ fontSize: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Icon name="kitchen" size={22} /> {t('kitchenDisplay')}</h1>
           {pendingCount > 0 && (
             <span className="badge badge-pending" style={{ fontSize: '0.875rem', padding: 'var(--space-1) var(--space-3)' }}>
-              {pendingCount} new
+              {pendingCount} {t('newTag')}
             </span>
           )}
           {preparingCount > 0 && (
             <span className="badge badge-warning" style={{ fontSize: '0.875rem', padding: 'var(--space-1) var(--space-3)', background: 'var(--warning)', color: 'white' }}>
-              {preparingCount} cooking
+              {preparingCount} {t('cooking')}
             </span>
           )}
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-4)', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-          <span>{orders.length} active</span>
+          <span>{orders.length} {t('active')}</span>
         </div>
       </div>
 
@@ -191,7 +191,7 @@ export default function KitchenPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <span className="kds-order-number">#{order.orderNumber.split('-').pop()}</span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                      {order.type === 'DINE_IN' && order.tableNumber ? (<><Icon name="menu" size={14} /> T{order.tableNumber}</>) : (<><Icon name="inventory" size={14} /> Takeout</>)}
+                      {order.type === 'DINE_IN' && order.tableNumber ? (<><Icon name="menu" size={14} /> T{order.tableNumber}</>) : (<><Icon name="inventory" size={14} /> {t('takeout')}</>)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.75rem' }}>
@@ -284,7 +284,7 @@ export default function KitchenPage() {
                       disabled={isLoading || !allReady}
                       onClick={() => handleServeOrder(order.id)}
                     >
-                      {allReady ? (<><Icon name="bell" size={18} /> Mark Ready</>) : (<><Icon name="hourglass" size={18} /> {order.items.filter((i) => i.status === 'READY').length}/{order.items.length} ready</>)}
+                      {allReady ? (<><Icon name="bell" size={18} /> {t('markReady')}</>) : (<><Icon name="hourglass" size={18} /> {order.items.filter((i) => i.status === 'READY').length}/{order.items.length} {t('ready')}</>)}
                     </button>
                   )}
 
@@ -295,7 +295,7 @@ export default function KitchenPage() {
                       disabled={isLoading}
                       onClick={() => handleServeOrder(order.id)}
                     >
-                      <Icon name="bell" size={18} /> Mark Ready
+                      <Icon name="bell" size={18} /> {t('markReady')}
                     </button>
                   )}
                 </div>

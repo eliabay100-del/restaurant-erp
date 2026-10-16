@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import CategoryTabs from '@/components/pos/CategoryTabs';
 import MenuGrid from '@/components/pos/MenuGrid';
 import OrderPanel from '@/components/pos/OrderPanel';
@@ -34,6 +34,7 @@ interface MenuItem {
 }
 
 export default function WaiterPage() {
+  const t = useTranslations('pos');
   const locale = useLocale();
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -88,7 +89,7 @@ export default function WaiterPage() {
   const handleSendToKitchen = async () => {
     if (items.length === 0) return;
     if (orderType === 'DINE_IN' && !tableNumber) {
-      setErrorMsg('Please select a table number first.');
+      setErrorMsg(t('selectTableFirst'));
       setTimeout(() => setErrorMsg(''), 3000);
       return;
     }
@@ -112,10 +113,10 @@ export default function WaiterPage() {
       // Emit socket event for kitchen immediately (no payment step for waiter)
       emit('order:new', { orderId: result.order.id, orderType, tableNumber });
       clearCart();
-      setSuccessMsg(`Order sent to kitchen!${tableNumber ? ` Table ${tableNumber}` : ''}`);
+      setSuccessMsg(t('orderSent'));
       setTimeout(() => setSuccessMsg(''), 4000);
     } else {
-      setErrorMsg('Failed to send order. Please try again.');
+      setErrorMsg(t('sendOrderFailed'));
       setTimeout(() => setErrorMsg(''), 3000);
     }
     setLoading(false);
@@ -124,7 +125,7 @@ export default function WaiterPage() {
   const handleMarkDelivered = async (orderId: number) => {
     const result = await updateOrderStatus(orderId, 'SERVED');
     if (result.success) {
-      setSuccessMsg('Order marked as Served!');
+      setSuccessMsg(t('orderMarkedServed'));
       setTimeout(() => setSuccessMsg(''), 3000);
       fetchReadyOrders();
       emit('order:status-update', { orderId, status: 'SERVED' });
@@ -143,10 +144,10 @@ export default function WaiterPage() {
         boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <Icon name="menu" size={16} /> Waiter Mode
+          <Icon name="menu" size={16} /> {t('waiterMode')}
         </span>
         <span style={{ marginLeft: 'auto', opacity: 0.85, fontWeight: 400, fontSize: '0.8rem' }}>
-          Orders go directly to kitchen
+          {t('ordersGoToKitchen')}
         </span>
       </div>
 
@@ -160,14 +161,14 @@ export default function WaiterPage() {
               onClick={() => setActiveView('MENU')}
               style={{ flex: 1, borderRadius: 'var(--radius-full)' }}
             >
-              <Icon name="bookOpen" size={16} /> Menu
+              <Icon name="bookOpen" size={16} /> {t('menu')}
             </button>
             <button 
               className={`btn ${activeView === 'READY' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => { setActiveView('READY'); fetchReadyOrders(); }}
               style={{ flex: 1, borderRadius: 'var(--radius-full)', position: 'relative', borderColor: activeView === 'READY' ? 'var(--accent-gold)' : 'var(--success)', color: activeView === 'READY' ? 'white' : 'var(--success)' }}
             >
-              <Icon name="bell" size={16} /> Ready to Serve
+              <Icon name="bell" size={16} /> {t('readyToServe')}
               {readyOrders.length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--danger)', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
                   {readyOrders.length}
@@ -190,11 +191,11 @@ export default function WaiterPage() {
             </>
           ) : (
             <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-4)' }}>Ready to Serve</h2>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-4)' }}>{t('readyToServe')}</h2>
               {loadingReady ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>Loading...</div>
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>{t('loadingOrders')}</div>
               ) : readyOrders.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>No orders waiting for pickup.</div>
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-muted)' }}>{t('noReadyOrders')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
                   {readyOrders.map(order => (
@@ -207,12 +208,12 @@ export default function WaiterPage() {
                           </div>
                         </div>
                         <div style={{ background: 'var(--success)', color: 'white', padding: '4px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', fontWeight: 600 }}>
-                          {order.type === 'DINE_IN' ? `Table ${order.tableNumber}` : 'Takeout'}
+                          {order.type === 'DINE_IN' ? t('table', { number: order.tableNumber ?? '' }) : t('takeout')}
                         </div>
                       </div>
                       
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                        <Icon name="user" size={14} /> Ordered by: {getLocaleName(order.staff.name, order.staff.nameAm, locale)}
+                        <Icon name="user" size={14} /> {t('orderedBy')} {getLocaleName(order.staff.name, order.staff.nameAm, locale)}
                       </div>
 
                       <div style={{ marginTop: 'var(--space-2)' }}>
@@ -225,7 +226,7 @@ export default function WaiterPage() {
 
                       <div style={{ marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px dashed var(--border)' }}>
                         <button className="btn w-full" style={{ background: 'var(--success)', color: 'white' }} onClick={() => handleMarkDelivered(order.id)}>
-                          <Icon name="menu" size={16} /> Mark Served
+                          <Icon name="menu" size={16} /> {t('markServed')}
                         </button>
                       </div>
                     </div>

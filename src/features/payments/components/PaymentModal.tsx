@@ -22,6 +22,7 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   const amountNum = parseFloat(amount) || 0;
@@ -46,6 +47,7 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
 
   const handlePay = async () => {
     setLoading(true);
+    setError('');
     const paid = method === 'CASH' ? amountNum : total;
     const result = await processPayment(orderId, method, paid, reference || undefined);
 
@@ -81,6 +83,9 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
         },
       });
       onComplete({ method, amountPaid: paid, change: method === 'CASH' ? Math.max(0, paid - total) : 0 });
+    } else {
+      // Never fail silently — the cashier needs to know why payment was rejected.
+      setError(result.error);
     }
     setLoading(false);
   };
@@ -112,7 +117,7 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
               <button
                 key={m}
                 className={`btn ${method === m ? 'btn-primary' : 'btn-secondary'} btn-lg`}
-                onClick={() => setMethod(m)}
+                onClick={() => { setMethod(m); setError(''); }}
                 style={{ flex: 1 }}
               >
                 {m === 'CASH' ? <Icon name="banknote" size={18} /> : m === 'CARD' ? <Icon name="creditCard" size={18} /> : <Icon name="smartphone" size={18} />}{' '}
@@ -173,6 +178,27 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
             />
           )}
         </div>
+        {error && (
+          <div
+            role="alert"
+            style={{
+              margin: '0 var(--space-5) var(--space-3)',
+              padding: 'var(--space-3)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--danger-glow, rgba(239, 68, 68, 0.12))',
+              color: 'var(--danger)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--space-2)',
+            }}
+          >
+            <Icon name="alertTriangle" size={16} /> {error}
+          </div>
+        )}
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>{tc('cancel')}</button>
           <button
