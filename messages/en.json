@@ -261,6 +261,7 @@
     "inventory": "Inventory",
     "settings": "Settings",
     "reports": "Reports",
+    "integrations": "Integrations",
     "backToDashboard": "Back to Dashboard"
   },
   "employees": {

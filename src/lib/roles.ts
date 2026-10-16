@@ -33,6 +33,7 @@ export const DASHBOARD_ACCESS: NavPermission[] = [
   { path: '/employees', roles: MANAGEMENT_ROLES },
   { path: '/inventory', roles: MANAGEMENT_ROLES },
   { path: '/reports', roles: MANAGEMENT_ROLES },
+  { path: '/settings', roles: ['ADMIN'] },
 ];
 
 /** Paths that are part of the dashboard but are not enumerated above. */

@@ -293,3 +293,32 @@ model OutboundEvent {
   @@index([kind])
   @@index([createdAt])
 }
+
+// ============ INTEGRATIONS (API keys + webhook endpoints) ============
+
+model ApiKey {
+  id        Int       @id @default(autoincrement())
+  name      String
+  keyHash   String    @unique
+  prefix    String
+  scopes    String    @default("orders:read")
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+  lastUsedAt DateTime?
+
+  createdById Int?
+
+  @@index([keyHash])
+}
+
+model WebhookEndpoint {
+  id        Int       @id @default(autoincrement())
+  name      String
+  url       String
+  secret    String
+  secretEncrypted Boolean @default(false)
+  enabled   Boolean   @default(true)
+  events    String    @default("payment.completed")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}

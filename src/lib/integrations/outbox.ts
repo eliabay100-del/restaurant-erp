@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { decryptSecret } from '@/lib/integrations/secrets';
 
 export type OutboundEventKind =
   | 'order.created'
@@ -67,8 +68,12 @@ export async function flushOutboundEvents(limit = 50): Promise<{
   let delivered = 0;
   let failed = 0;
 
-  const webhookUrl = process.env.INTEGRATION_WEBHOOK_URL;
-  const secret = process.env.INTEGRATION_WEBHOOK_SECRET;
+  const endpoints = await prisma.webhookEndpoint.findMany({ where: { enabled: true } });
+  const recipients: { url: string; secret: string }[] = endpoints.length > 0
+    ? endpoints.map((e) => ({ url: e.url, secret: decryptSecret(e.secret, e.secretEncrypted) }))
+    : (process.env.INTEGRATION_WEBHOOK_URL
+        ? [{ url: process.env.INTEGRATION_WEBHOOK_URL, secret: process.env.INTEGRATION_WEBHOOK_SECRET ?? '' }]
+        : []);
 
   for (const ev of eligible) {
     const claimed = await prisma.outboundEvent.updateMany({
@@ -81,34 +86,47 @@ export async function flushOutboundEvents(limit = 50): Promise<{
     let sent = false;
     let error: string | null = null;
 
-    if (webhookUrl) {
-      try {
-        const body = JSON.stringify({
-          id: ev.id,
-          kind: ev.kind,
-          aggregateId: ev.aggregateId,
-          payload: JSON.parse(ev.payload),
-          createdAt: ev.createdAt.toISOString(),
-        });
-
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (secret) {
-          const ts = String(Date.now());
-          const crypto = await import('crypto');
-          const sig = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-          headers['X-Webhook-Timestamp'] = ts;
-          headers['X-Webhook-Signature'] = `sha256=${sig}`;
-        }
-
-        const res = await fetch(webhookUrl, { method: 'POST', headers, body, signal: AbortSignal.timeout(10000) });
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`.trim());
-        sent = true;
-      } catch (e) {
-        error = e instanceof Error ? e.message : String(e);
-      }
-    } else {
+    if (recipients.length === 0) {
       // No receiver configured yet — treat as delivered locally.
       sent = true;
+    } else {
+      const body = JSON.stringify({
+        id: ev.id,
+        kind: ev.kind,
+        aggregateId: ev.aggregateId,
+        payload: JSON.parse(ev.payload),
+        createdAt: ev.createdAt.toISOString(),
+      });
+
+      for (const r of recipients) {
+        let thisSent = false;
+        let thisErr: string | null = null;
+        try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (r.secret) {
+            const ts = String(Date.now());
+            const crypto = await import('crypto');
+            const sig = crypto.createHmac('sha256', r.secret).update(`${ts}.${body}`).digest('hex');
+            headers['X-Webhook-Timestamp'] = ts;
+            headers['X-Webhook-Signature'] = `sha256=${sig}`;
+          }
+          const res = await fetch(r.url, { method: 'POST', headers, body, signal: AbortSignal.timeout(10000) });
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`.trim());
+          thisSent = true;
+        } catch (e) {
+          thisErr = e instanceof Error ? e.message : String(e);
+        }
+        if (thisSent) {
+          sent = true;
+          error = null;
+          break; // delivered to at least one receiver
+        } else {
+          error = thisErr;
+        }
+      }
+      if (recipients.length > 0 && !sent) {
+        sent = false;
+      }
     }
 
     const backoffMs = Math.min(60_000, 1000 * 2 ** Math.min(attempt, 10));

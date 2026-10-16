@@ -12,7 +12,7 @@ import OfflineBanner from '@/components/shared/OfflineBanner';
 import Icon, { type IconName } from '@/components/shared/Icon';
 import Link from 'next/link';
 
-type NavKey = 'overview' | 'orders' | 'menu' | 'shifts' | 'employees' | 'inventory' | 'reports';
+type NavKey = 'overview' | 'orders' | 'menu' | 'shifts' | 'employees' | 'inventory' | 'reports' | 'integrations';
 
 const navItems: { path: string; icon: IconName; labelKey: NavKey }[] = [
   { path: '/overview', icon: 'dashboard', labelKey: 'overview' },
@@ -22,6 +22,7 @@ const navItems: { path: string; icon: IconName; labelKey: NavKey }[] = [
   { path: '/employees', icon: 'employees', labelKey: 'employees' },
   { path: '/inventory', icon: 'inventory', labelKey: 'inventory' },
   { path: '/reports', icon: 'reports', labelKey: 'reports' },
+  { path: '/settings/integrations', icon: 'folder', labelKey: 'integrations' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
