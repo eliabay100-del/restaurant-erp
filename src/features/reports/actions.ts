@@ -87,9 +87,10 @@ export async function getWeeklyReport() {
     weekStart.setDate(today.getDate() - 6);
     weekStart.setHours(0, 0, 0, 0);
 
+    const weekRange = { gte: weekStart, lte: today };
+
     const payments = await prisma.payment.findMany({
-      where: { createdAt: { gte: weekStart, lte: today } },
-      include: { order: { select: { createdAt: true } } },
+      where: { createdAt: weekRange },
     });
 
     // Daily revenue for the week
@@ -105,16 +106,39 @@ export async function getWeeklyReport() {
     }
 
     const totalRevenue = payments.reduce((s, p) => s + p.amountDue, 0);
-    const totalOrders = await prisma.order.count({
-      where: { createdAt: { gte: weekStart, lte: today }, status: { not: 'CANCELLED' } },
+    const cashRevenue = payments.filter((p) => p.method === 'CASH').reduce((s, p) => s + p.amountDue, 0);
+    const cardRevenue = payments.filter((p) => p.method === 'CARD').reduce((s, p) => s + p.amountDue, 0);
+    const mobileRevenue = payments.filter((p) => p.method === 'MOBILE').reduce((s, p) => s + p.amountDue, 0);
+
+    const orders = await prisma.order.findMany({
+      where: { createdAt: weekRange, status: { not: 'CANCELLED' } },
+      include: { items: true },
     });
+    const totalOrders = orders.length;
+
+    // Top selling items this week
+    const itemMap: Record<string, { nameEn: string; nameAm: string | null; qty: number; revenue: number }> = {};
+    for (const order of orders) {
+      for (const item of order.items) {
+        const key = item.itemNameEn;
+        if (!itemMap[key]) itemMap[key] = { nameEn: item.itemNameEn, nameAm: item.itemNameAm, qty: 0, revenue: 0 };
+        itemMap[key].qty += item.quantity;
+        itemMap[key].revenue += item.totalPrice;
+      }
+    }
+    const topItems = Object.values(itemMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
 
     return {
       success: true,
       totalRevenue,
       totalOrders,
+      cashRevenue,
+      cardRevenue,
+      mobileRevenue,
+      avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
       avgDailyRevenue: totalRevenue / 7,
       dailyRevenue: dailyMap,
+      topItems,
     };
   } catch (error) {
     console.error('Weekly report error:', error);

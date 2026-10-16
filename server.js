@@ -33,7 +33,9 @@ app.prepare().then(() => {
 
     // Cashier places a new order
     socket.on('order:new', (order) => {
-      console.log(`[Socket] New order: #${order.orderNumber}`);
+      const label = order?.orderNumber ?? order?.orderId ?? 'unknown';
+      const table = order?.tableNumber ? ` (table ${order.tableNumber})` : '';
+      console.log(`[Socket] New order: #${label}${table}`);
       // Broadcast to ALL clients (kitchen displays, other cashiers, managers)
       socket.broadcast.emit('order:new', order);
     });

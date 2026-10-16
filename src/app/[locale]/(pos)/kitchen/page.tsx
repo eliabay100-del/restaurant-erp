@@ -83,23 +83,23 @@ export default function KitchenPage() {
     setUpdatingItemId(itemId);
     const result = await updateOrderItemStatus(itemId, nextStatus);
     if (result.success) {
+      const currentOrder = orders.find((o) => o.id === orderId);
+      const updatedItems = currentOrder
+        ? currentOrder.items.map((i) => (i.id === itemId ? { ...i, status: nextStatus } : i))
+        : [];
+
+      // Roll the order up from its items (mirrors `updateOrderItemStatus` on the server).
+      const orderStatus =
+        updatedItems.length > 0 && updatedItems.every((i) => i.status === 'READY')
+          ? 'READY'
+          : updatedItems.some((i) => i.status !== 'PENDING')
+          ? 'PREPARING'
+          : 'PENDING';
+
       setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId
-            ? {
-                ...o,
-                items: o.items.map((i) => (i.id === itemId ? { ...i, status: nextStatus } : i)),
-                // Auto-update order status based on items
-                status: o.items.every((i) => (i.id === itemId ? nextStatus : i.status) === 'READY')
-                  ? 'READY'
-                  : o.items.some((i) => (i.id === itemId ? nextStatus : i.status) !== 'PENDING')
-                  ? 'PREPARING'
-                  : 'PENDING',
-              }
-            : o
-        )
+        prev.map((o) => (o.id === orderId ? { ...o, items: updatedItems, status: orderStatus } : o))
       );
-      emit('order:status-update', { orderId });
+      emit('order:status-update', { orderId, status: orderStatus });
     }
     setUpdatingItemId(null);
   };

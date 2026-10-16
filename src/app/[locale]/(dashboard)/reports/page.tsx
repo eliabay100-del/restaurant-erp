@@ -17,8 +17,6 @@ interface ReportTopItem {
   nameEn: string;
   qty: number;
   revenue: number;
-  /** Legacy CSV field — not produced by the current report payloads. */
-  rev?: number;
 }
 
 /** Payload of `getDailyReport`. */
@@ -37,8 +35,13 @@ interface DailyReportData {
 interface WeeklyReportData {
   totalRevenue: number;
   totalOrders: number;
+  cashRevenue: number;
+  cardRevenue: number;
+  mobileRevenue: number;
+  avgOrderValue: number;
   avgDailyRevenue: number;
   dailyRevenue: Record<string, number>;
+  topItems: ReportTopItem[];
 }
 
 /** Payload of `getMonthlyReport`. */
@@ -54,9 +57,9 @@ interface MonthlyReportData {
 }
 
 /**
- * Any of the three report payloads, for the CSV exporter. Fields that only
- * exist on some periods (e.g. `avgOrderValue` is missing from the weekly
- * payload) are optional here — the exporter already guards most of them.
+ * Any of the three report payloads, for the CSV exporter. A few fields are
+ * period-specific (e.g. `hourlyRevenue` only exists on the daily payload), so
+ * they are optional here and every read is defaulted.
  */
 interface ReportExportData {
   totalRevenue: number;
@@ -181,17 +184,17 @@ export default function ReportsPage() {
     lines.push(`Period,${period.toUpperCase()}`);
     lines.push(`Total Revenue,${data.totalRevenue}`);
     lines.push(`Total Orders,${data.totalOrders}`);
-    lines.push(`Avg Order Value,${data.avgOrderValue}`);
-    lines.push(`Cash Revenue,${data.cashRevenue}`);
-    lines.push(`Card Revenue,${data.cardRevenue}`);
-    lines.push(`Mobile Revenue,${data.mobileRevenue}`);
+    lines.push(`Avg Order Value,${data.avgOrderValue ?? 0}`);
+    lines.push(`Cash Revenue,${data.cashRevenue ?? 0}`);
+    lines.push(`Card Revenue,${data.cardRevenue ?? 0}`);
+    lines.push(`Mobile Revenue,${data.mobileRevenue ?? 0}`);
     
     lines.push('');
     lines.push('--- TOP SELLING ITEMS ---');
     lines.push('Item Name,Quantity Sold,Revenue');
     if (data.topItems && data.topItems.length > 0) {
       data.topItems.forEach((item: ReportTopItem) => {
-        lines.push(`"${item.nameEn}",${item.qty},${item.rev}`);
+        lines.push(`"${item.nameEn}",${item.qty},${item.revenue}`);
       });
     } else {
       lines.push('No items sold');

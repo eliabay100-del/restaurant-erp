@@ -12,13 +12,14 @@ export interface ReportTopItem {
 export interface ReportData {
   totalRevenue: number;
   totalOrders: number;
-  avgOrderValue: number;
-  cashRevenue: number;
-  cardRevenue: number;
-  mobileRevenue: number;
-  hourlyRevenue: Record<number, number>;
-  dailyRevenue: Record<string, number>;
-  topItems: ReportTopItem[];
+  /** Not produced by the weekly payload — render defensively. */
+  avgOrderValue?: number;
+  cashRevenue?: number;
+  cardRevenue?: number;
+  mobileRevenue?: number;
+  hourlyRevenue?: Record<number, number>;
+  dailyRevenue?: Record<string, number>;
+  topItems?: ReportTopItem[];
 }
 
 export const ComprehensiveReportExport = React.forwardRef<HTMLDivElement, { data: ReportData | null, period: string, title: string }>(
@@ -84,7 +85,7 @@ export const ComprehensiveReportExport = React.forwardRef<HTMLDivElement, { data
           </div>
           <div style={{ flex: 1, background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
             <div style={{ color: '#64748b', fontSize: '16px', marginBottom: '8px' }}>Avg Order Value</div>
-            <div style={{ color: '#0f172a', fontSize: '36px', fontWeight: 'bold' }}>{data.avgOrderValue.toLocaleString()} ETB</div>
+            <div style={{ color: '#0f172a', fontSize: '36px', fontWeight: 'bold' }}>{(data.avgOrderValue ?? 0).toLocaleString()} ETB</div>
           </div>
         </div>
 
@@ -134,21 +135,21 @@ export const ComprehensiveReportExport = React.forwardRef<HTMLDivElement, { data
                   <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#10b981' }} />
                   <span style={{ fontSize: '16px', color: '#334155' }}>Cash</span>
                 </div>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{data.cashRevenue.toLocaleString()} ETB ({cashPct.toFixed(1)}%)</div>
+                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{(data.cashRevenue ?? 0).toLocaleString()} ETB ({cashPct.toFixed(1)}%)</div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#3b82f6' }} />
                   <span style={{ fontSize: '16px', color: '#334155' }}>Card</span>
                 </div>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{data.cardRevenue.toLocaleString()} ETB ({cardPct.toFixed(1)}%)</div>
+                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{(data.cardRevenue ?? 0).toLocaleString()} ETB ({cardPct.toFixed(1)}%)</div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#8b5cf6' }} />
                   <span style={{ fontSize: '16px', color: '#334155' }}>Mobile</span>
                 </div>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{data.mobileRevenue.toLocaleString()} ETB ({mobilePct.toFixed(1)}%)</div>
+                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{(data.mobileRevenue ?? 0).toLocaleString()} ETB ({mobilePct.toFixed(1)}%)</div>
               </div>
             </div>
           </div>
