@@ -1,0 +1,275 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ STAFF & AUTH ============
+
+model Staff {
+  id          Int      @id @default(autoincrement())
+  name        String
+  nameAm      String?
+  pinHash     String
+  role        String   @default("CASHIER") // CASHIER | KITCHEN | MANAGER | ADMIN
+  isActive    Boolean  @default(true)
+  phone       String?
+  salary      Float    @default(0)
+  bankName    String?
+  bankAccount String?
+  startDate   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shifts         Shift[]
+  orders         Order[]
+  auditLogs      AuditLog[]
+  salaryPayments SalaryPayment[]
+
+  @@index([role])
+  @@index([isActive])
+}
+
+// ============ SHIFTS ============
+
+model Shift {
+  id             Int       @id @default(autoincrement())
+  staffId        Int
+  staff          Staff     @relation(fields: [staffId], references: [id])
+  startTime      DateTime  @default(now())
+  endTime        DateTime?
+  openingCash    Float     @default(0)
+  closingCash    Float?
+  expectedCash   Float?
+  status         String    @default("OPEN") // OPEN | PENDING_APPROVAL | APPROVED | REJECTED
+  notes          String?
+  approvedById   Int?
+
+  orders         Order[]
+
+  @@index([staffId])
+  @@index([status])
+  @@index([startTime])
+}
+
+// ============ MENU ============
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  nameEn    String
+  nameAm    String?
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  color     String?
+  icon      String?
+
+  items     MenuItem[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model MenuItem {
+  id          Int      @id @default(autoincrement())
+  nameEn      String
+  nameAm      String?
+  descEn      String?
+  descAm      String?
+  price       Float
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+  image       String?
+  isAvailable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems  OrderItem[]
+
+  variants    MenuVariant[]
+  ingredients RecipeIngredient[]
+
+  @@index([categoryId])
+  @@index([isAvailable])
+  @@index([sortOrder])
+}
+
+model MenuVariant {
+  id          Int      @id @default(autoincrement())
+  menuItemId  Int
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  nameEn      String
+  nameAm      String?
+  priceOffset Float    @default(0) // Usually 0 for same-price variants
+  isActive    Boolean  @default(true)
+
+  orderItems  OrderItem[]
+
+  @@index([menuItemId])
+}
+
+model RecipeIngredient {
+  id              Int           @id @default(autoincrement())
+  menuItemId      Int
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Float         // Amount deducted per order
+  unit            String        // Must match inventory item unit
+
+  @@index([menuItemId])
+  @@index([inventoryItemId])
+}
+
+// ============ ORDERS ============
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNumber String      @unique
+  type        String      @default("DINE_IN") // DINE_IN | TAKEOUT
+  status      String      @default("PENDING") // PENDING | PREPARING | READY | SERVED | CANCELLED
+  tableNumber String?
+  staffId     Int
+  staff       Staff       @relation(fields: [staffId], references: [id])
+  shiftId     Int
+  shift       Shift       @relation(fields: [shiftId], references: [id])
+  subtotal    Float       @default(0)
+  taxRate     Float       @default(0.15)
+  taxAmount   Float       @default(0)
+  discount    Float       @default(0)
+  total       Float       @default(0)
+  note        String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  items       OrderItem[]
+  payment     Payment?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([staffId])
+  @@index([shiftId])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id           Int          @id @default(autoincrement())
+  orderId      Int
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId   Int
+  menuItem     MenuItem     @relation(fields: [menuItemId], references: [id])
+  variantId    Int?
+  variant      MenuVariant? @relation(fields: [variantId], references: [id])
+  quantity     Int          @default(1)
+  unitPrice    Float
+  itemNameEn   String
+  itemNameAm   String?
+  totalPrice   Float
+  status       String   @default("PENDING") // PENDING | PREPARING | READY | SERVED
+  note         String?
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// ============ PAYMENTS ============
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  orderId       Int      @unique
+  order         Order    @relation(fields: [orderId], references: [id])
+  method        String   // CASH | CARD | MOBILE
+  amountPaid    Float
+  amountDue     Float
+  changeGiven   Float    @default(0)
+  tipAmount     Float    @default(0)
+  reference     String?
+  createdAt     DateTime @default(now())
+
+  @@index([method])
+  @@index([createdAt])
+}
+
+// ============ SALARY PAYMENTS ============
+
+model SalaryPayment {
+  id          Int      @id @default(autoincrement())
+  staffId     Int
+  staff       Staff    @relation(fields: [staffId], references: [id])
+  amount      Float
+  bonus       Float    @default(0)
+  deductions  Float    @default(0)
+  absentDays  Int      @default(0)
+  dailyRate   Float    @default(0)
+  netPay      Float
+  month       String   // e.g. "2026-09"
+  status      String   @default("PENDING") // PENDING | PAID
+  note        String?
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([staffId])
+  @@index([month])
+  @@index([status])
+}
+
+// ============ INVENTORY ============
+
+model InventoryItem {
+  id            Int       @id @default(autoincrement())
+  nameEn        String
+  nameAm        String?
+  category      String    @default("RAW_MATERIAL") // RAW_MATERIAL | MISC
+  unit          String    @default("kg") // kg | g | l | ml | pcs | box | bag | bottle
+  currentStock  Float     @default(0)
+  unitCost      Float     @default(0)
+  reorderLevel  Float     @default(0)
+  supplier      String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transactions  InventoryTransaction[]
+  ingredients   RecipeIngredient[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model InventoryTransaction {
+  id              Int            @id @default(autoincrement())
+  inventoryItemId Int
+  inventoryItem   InventoryItem  @relation(fields: [inventoryItemId], references: [id])
+  type            String         // PURCHASE | USAGE | WASTAGE | ADJUSTMENT
+  quantity        Float
+  unitCost        Float          @default(0)
+  totalCost       Float          @default(0)
+  note            String?
+  staffId         Int?
+  createdAt       DateTime       @default(now())
+
+  @@index([inventoryItemId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// ============ AUDIT ============
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  staffId   Int
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+  @@index([action])
+  @@index([createdAt])
+}
