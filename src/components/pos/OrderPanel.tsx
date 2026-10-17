@@ -7,12 +7,12 @@ import Icon from '@/components/shared/Icon';
 
 interface OrderPanelProps {
   onPlaceOrder: () => void;
-  onPay: () => void;
+  onPay?: () => void;
   loading?: boolean;
   isWaiter?: boolean;
 }
 
-export default function OrderPanel({ onPlaceOrder, onPay, loading, isWaiter }: OrderPanelProps) {
+export default function OrderPanel({ onPlaceOrder, loading, isWaiter }: OrderPanelProps) {
   const t = useTranslations('pos');
   const tc = useTranslations('common');
   const locale = useLocale();
@@ -25,22 +25,6 @@ export default function OrderPanel({ onPlaceOrder, onPay, loading, isWaiter }: O
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const clearCart = useCartStore((s) => s.clearCart);
-  const getSubtotal = useCartStore((s) => s.getSubtotal);
-  const getDiscount = useCartStore((s) => s.getDiscount);
-  const discount = useCartStore((s) => s.discount);
-  const setDiscount = useCartStore((s) => s.setDiscount);
-  const getTax = useCartStore((s) => s.getTax);
-  const getTotal = useCartStore((s) => s.getTotal);
-
-  const handleDiscount = () => {
-    const input = window.prompt(
-      'Enter discount amount (ETB):',
-      discount > 0 ? String(discount) : '0',
-    );
-    if (input === null) return;
-    const value = parseFloat(input);
-    setDiscount(Number.isNaN(value) ? 0 : value);
-  };
 
   const tables = Array.from({ length: 20 }, (_, i) => String(i + 1));
 
@@ -174,53 +158,6 @@ export default function OrderPanel({ onPlaceOrder, onPay, loading, isWaiter }: O
         )}
       </div>
 
-      {/* Totals */}
-      {items.length > 0 && (
-        <div className="order-totals">
-          <div className="order-total-row">
-            <span className="order-total-label">{t('subtotal')}</span>
-            <span className="order-total-amount">{formatPrice(getSubtotal(), locale)}</span>
-          </div>
-          {getDiscount() > 0 && (
-            <div className="order-total-row">
-              <span className="order-total-label" style={{ color: 'var(--accent-emerald)' }}>
-                {t('discount')}
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setDiscount(0)}
-                  style={{ padding: '0 4px', minHeight: 'auto', marginLeft: 'var(--space-2)', fontSize: '0.75rem' }}
-                >
-                  {tc('remove')}
-                </button>
-              </span>
-              <span className="order-total-amount" style={{ color: 'var(--accent-emerald)' }}>
-                −{formatPrice(getDiscount(), locale)}
-              </span>
-            </div>
-          )}
-          {getDiscount() === 0 && (
-            <div className="order-total-row">
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={handleDiscount}
-                style={{ padding: '0', minHeight: 'auto', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}
-              >
-                <Icon name="calculator" size={14} /> {t('discount')}
-              </button>
-              <span />
-            </div>
-          )}
-          <div className="order-total-row">
-            <span className="order-total-label">{t('tax')}</span>
-            <span className="order-total-amount">{formatPrice(getTax(), locale)}</span>
-          </div>
-          <div className="order-total-row total">
-            <span>{t('orderTotal')}</span>
-            <span className="order-total-amount">{formatPrice(getTotal(), locale)}</span>
-          </div>
-        </div>
-      )}
-
       {/* Action Buttons */}
       <div style={{ padding: 'var(--space-3) var(--space-4)', display: 'flex', gap: 'var(--space-2)' }}>
         {isWaiter ? (
@@ -243,14 +180,7 @@ export default function OrderPanel({ onPlaceOrder, onPay, loading, isWaiter }: O
             >
               {loading ? tc('loading') : (orderType === 'DINE_IN' && !tableNumber && items.length > 0) ? (<><Icon name="alertTriangle" size={18} /> Select a Table</>) : (<><Icon name="kitchen" size={18} /> {t('sendToKitchen')}</>)}
             </button>
-            {/* Or settle immediately (walk-in / takeout). */}
-            <button
-              className="btn btn-secondary btn-lg w-full"
-              disabled={items.length === 0 || loading}
-              onClick={onPay}
-            >
-              <Icon name="coins" size={18} /> {t('pay')} — {formatPrice(getTotal(), locale)}
-            </button>
+            {/* Payment is settled later from the Unpaid list. */}
           </div>
         )}
       </div>
