@@ -1020,6 +1020,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .pos-order-panel {
@@ -1028,6 +1029,7 @@ a:hover {
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .category-tabs {
@@ -1343,6 +1345,9 @@ a:hover {
   border-radius: var(--radius);
   border: 2px solid var(--border);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
   animation: scaleIn var(--transition-slow) ease;
   transition: border-color var(--transition);
 }
@@ -1388,6 +1393,15 @@ a:hover {
 
 .kds-ticket-body {
   padding: var(--space-3) var(--space-4);
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 45vh;
+}
+
+.kds-ticket-header,
+.kds-ticket-footer {
+  flex-shrink: 0;
 }
 
 .kds-item {
