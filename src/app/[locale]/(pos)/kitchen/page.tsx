@@ -278,14 +278,20 @@ export default function KitchenPage() {
                   )}
 
                   {order.status === 'PREPARING' && (
-                    <button
-                      className="btn btn-lg w-full"
-                      style={{ background: allReady ? 'var(--success)' : 'var(--bg-input)', color: allReady ? 'white' : 'var(--text-muted)' }}
-                      disabled={isLoading || !allReady}
-                      onClick={() => handleServeOrder(order.id)}
-                    >
-                      {allReady ? (<><Icon name="bell" size={18} /> {t('markReady')}</>) : (<><Icon name="hourglass" size={18} /> {order.items.filter((i) => i.status === 'READY').length}/{order.items.length} {t('ready')}</>)}
-                    </button>
+                    allReady ? (
+                      <button
+                        className="btn btn-lg w-full"
+                        style={{ background: 'var(--success)', color: 'white' }}
+                        disabled={isLoading}
+                        onClick={() => handleServeOrder(order.id)}
+                      >
+                        <Icon name="bell" size={18} /> {t('markReady')}
+                      </button>
+                    ) : (
+                      <div style={{ width: '100%', textAlign: 'center', padding: 'var(--space-2)', fontSize: '0.875rem', color: 'var(--text-muted)', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                        <Icon name="hourglass" size={16} /> {order.items.filter((i) => i.status === 'READY').length}/{order.items.length} {t('ready')}
+                      </div>
+                    )
                   )}
 
                   {order.status === 'READY' && (
