@@ -4,7 +4,7 @@ import { authorize, MANAGEMENT_ROLES } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateApiKey } from '@/lib/integrations/api-keys';
 import { encryptSecret } from '@/lib/integrations/secrets';
-import { emitOutboundEvent, flushOutboundEvents } from '@/lib/integrations/outbox';
+import { createBackup, listBackups, deleteBackup } from '@/lib/integrations/backup';
 
 export async function getIntegrationSnapshot() {
   const auth = await authorize(MANAGEMENT_ROLES);
@@ -131,16 +131,34 @@ export async function deleteApiKeyAction(id: number): Promise<IntegrationResult>
   return { success: true };
 }
 
-export async function sendTestEventAction(): Promise<IntegrationResult & { flushed?: unknown }> {
+export async function createDatabaseBackupAction(schedule: 'daily' | 'weekly' | 'monthly'): Promise<
+  { success: true; filename: string; size: number; createdAt: string } | { success: false; error: string }
+> {
   const auth = await authorize(MANAGEMENT_ROLES);
   if (!auth.ok) return { success: false, error: auth.error };
+  try {
+    const info = createBackup(schedule);
+    return { success: true, ...info };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
-  await emitOutboundEvent(prisma, 'order.created', 0, {
-    test: true,
-    issuedAt: new Date().toISOString(),
-    note: 'Integration test event from /settings/integrations',
-  });
+export async function listDatabaseBackupsAction(): Promise<
+  { success: true; backups: { filename: string; size: number; createdAt: string }[] } | { success: false; error: string }
+> {
+  const auth = await authorize(MANAGEMENT_ROLES);
+  if (!auth.ok) return { success: false, error: auth.error };
+  try {
+    return { success: true, backups: listBackups() };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
-  const flushed = await flushOutboundEvents();
-  return { success: true, flushed };
+export async function deleteDatabaseBackupAction(filename: string): Promise<{ success: boolean; error?: string }> {
+  const auth = await authorize(MANAGEMENT_ROLES);
+  if (!auth.ok) return { success: false, error: auth.error };
+  if (!deleteBackup(filename)) return { success: false, error: 'Invalid or missing backup' };
+  return { success: true };
 }

@@ -4,22 +4,18 @@ import { useEffect, useState, useTransition } from 'react';
 import { useAuth } from '@/context/AuthProvider';
 import {
   getIntegrationSnapshot,
-  createWebhookEndpoint,
-  toggleWebhookEndpoint,
-  deleteWebhookEndpoint,
   generateApiKeyAction,
   revokeApiKeyAction,
-  deleteApiKeyAction,
-  sendTestEventAction,
+  createDatabaseBackupAction,
+  listDatabaseBackupsAction,
+  deleteDatabaseBackupAction,
 } from '@/features/integrations/actions';
 
-type Endpoint = { id: number; name: string; url: string; secretPreview: string; enabled: boolean; events: string[]; createdAt: string };
 type Key = { id: number; name: string; prefix: string; scopes: string[]; createdAt: string; revokedAt: string | null; lastUsedAt: string | null };
-type Recent = { id: number; kind: string; status: string; attempts: number; lastError: string | null; createdAt: string; aggregateId: number | null };
 type Snapshot = {
-  endpoints: Endpoint[];
+  endpoints: unknown[];
   apiKeys: Key[];
-  outbox: { pending: number; delivered: number; recent: Recent[] };
+  outbox: { pending: number; delivered: number };
   cronConfigured: boolean;
   webhookConfigured: boolean;
 };
@@ -27,192 +23,209 @@ type Snapshot = {
 export default function IntegrationsSettingsPage() {
   const { staff } = useAuth();
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const [epName, setEpName] = useState('');
-  const [epUrl, setEpUrl] = useState('');
-  const [epSecret, setEpSecret] = useState('');
-  const [epEvents, setEpEvents] = useState('payment.completed,order.created,order.status.changed');
-  const [epEnabled, setEpEnabled] = useState(true);
-
-  const [keyName, setKeyName] = useState('');
-  const [keyScopes, setKeyScopes] = useState('orders:read');
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [backups, setBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
   const refresh = async () => {
-    setLoading(true);
-    setErr(null);
     try {
       const res = await getIntegrationSnapshot();
-      if (!res.success) setErr(res.error);
-      else setSnap(res.data as Snapshot);
+      if (!res.success) setMsg(res.error ?? 'Failed to load');
+      else {
+        setSnap(res.data as Snapshot);
+        const hasKey = (res.data as Snapshot).apiKeys.some(
+          (k) => !k.revokedAt && k.name === 'P-Check'
+        );
+        setConnected(hasKey);
+      }
     } catch (e) {
-      setErr(String(e));
-    } finally {
-      setLoading(false);
+      setMsg(String(e));
     }
   };
 
   useEffect(() => {
-    const id = setTimeout(() => { refresh(); }, 0);
+    const id = setTimeout(() => { refresh(); loadBackups(); }, 0);
     return () => clearTimeout(id);
   }, []);
 
-  const addEndpoint = () => {
-    setMsg(null);
-    startTransition(async () => {
-      const res = await createWebhookEndpoint({
-        name: epName,
-        url: epUrl,
-        secret: epSecret,
-        events: epEvents.split(',').map((s) => s.trim()).filter(Boolean),
-        enabled: epEnabled,
-      });
-      if (!res.success) setMsg('❌ ' + (res.error ?? 'failed'));
-      else {
-        setMsg('✅ Webhook endpoint added');
-        setEpName(''); setEpUrl(''); setEpSecret(''); setEpEvents('payment.completed,order.created,order.status.changed');
-        refresh();
-      }
-    });
-  };
-
-  const addKey = () => {
+  const generateKey = () => {
     setMsg(null);
     setCreatedKey(null);
     startTransition(async () => {
-      const res = await generateApiKeyAction({ name: keyName, scopes: keyScopes.split(',').map((s) => s.trim()).filter(Boolean) });
-      if (!res.success) setMsg('❌ ' + (res.error ?? 'failed'));
+      const keyRes = await generateApiKeyAction({
+        name: 'P-Check',
+        scopes: ['orders:read', 'webhooks:write'],
+      });
+      if (!keyRes.success) {
+        setMsg('Failed: ' + (keyRes.error ?? 'Unknown error'));
+        return;
+      }
+      setCreatedKey(keyRes.key);
+      setConnected(true);
+      setMsg('API key created! Copy it and paste it in your P-Check dashboard under ERP Integrations.');
+      refresh();
+    });
+  };
+
+  const disconnect = () => {
+    startTransition(async () => {
+      if (snap) {
+        for (const k of snap.apiKeys) {
+          if (!k.revokedAt && k.name === 'P-Check') {
+            await revokeApiKeyAction(k.id);
+          }
+        }
+      }
+      setConnected(false);
+      setCreatedKey(null);
+      setMsg('Disconnected from P-Check.');
+      refresh();
+    });
+  };
+
+  async function loadBackups() {
+    const r = await listDatabaseBackupsAction();
+    if (r.success) setBackups(r.backups);
+  }
+
+  const handleBackup = (schedule: 'daily' | 'weekly' | 'monthly') => {
+    setBackupMsg(null);
+    startTransition(async () => {
+      const r = await createDatabaseBackupAction(schedule);
+      if (!r.success) setBackupMsg('❌ ' + (r.error ?? 'failed'));
       else {
-        setMsg('✅ API key created — copy now, shown once.');
-        setCreatedKey(res.key);
-        setKeyName(''); setKeyScopes('orders:read');
-        refresh();
+        setBackupMsg(`✅ Backup created: ${r.filename} (${(r.size / 1024).toFixed(1)} KB)`);
+        loadBackups();
       }
     });
   };
 
-  const sendTest = () => {
-    setMsg(null);
+  const handleDeleteBackup = (filename: string) => {
     startTransition(async () => {
-      const res = await sendTestEventAction();
-      if (!res.success) setMsg('❌ ' + (res.error ?? 'failed'));
-      else { setMsg('✅ Test event enqueued & flushed'); refresh(); }
+      await deleteDatabaseBackupAction(filename);
+      loadBackups();
     });
   };
-
-  const card: React.CSSProperties = { background: 'var(--bg-secondary, #f8fafc)', borderRadius: 12, padding: 16, border: '1px solid var(--border, #e2e8f0)', marginBottom: 16 };
-  const inp: React.CSSProperties = { width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', marginBottom: 8 };
-  const btn: React.CSSProperties = { padding: '8px 14px', borderRadius: 6, border: 'none', background: '#0f172a', color: '#fff', cursor: 'pointer', marginRight: 8 };
 
   if (!staff) {
     return <div style={{ padding: 24 }}>Please sign in as administrator.</div>;
   }
 
+  const card: React.CSSProperties = { background: 'var(--bg-secondary, #f8fafc)', borderRadius: 16, padding: 20, border: '1px solid var(--border, #e2e8f0)', marginBottom: 16 };
+  const btn: React.CSSProperties = { padding: '8px 14px', borderRadius: 6, border: 'none', background: '#0f172a', color: '#fff', cursor: 'pointer', marginRight: 8, fontSize: 13, fontWeight: 500 };
+
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Integrations</h1>
-      <p style={{ color: '#64748b', marginBottom: 16 }}>
-        Connect external apps (e.g., a payment verifier). Outbox drainer runs via cron against <code>/api/cron/flush-outbox</code>.
-      </p>
-
-      {msg && <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: '#eef2ff', color: '#3730a3' }}>{msg}</div>}
-      {err && <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: '#fee2e2', color: '#991b1b' }}>{err}</div>}
-
-      <div style={card}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Outbox status</h2>
-        <div>Pending: <b>{snap?.outbox.pending ?? '…'}</b> · Delivered: <b>{snap?.outbox.delivered ?? '…'}</b></div>
-        <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-          Cron configured: {snap?.cronConfigured ? '✅ (OUTBOX_CRON_SECRET set)' : '⚠️ not set — cron endpoint is locked (401)'} ·
-          Env webhook: {snap?.webhookConfigured ? 'SET' : 'not set'}
+    <div style={{ maxWidth: 500, margin: '40px auto', padding: 16 }}>
+      {msg && (
+        <div style={{
+          padding: 12, marginBottom: 16, borderRadius: 8,
+          background: msg.startsWith('Failed') ? '#fef2f2' : '#ecfdf5',
+          color: msg.startsWith('Failed') ? '#991b1b' : '#166534',
+          fontSize: 14,
+        }}>
+          {msg}
         </div>
-        <button style={{ ...btn, marginTop: 8 }} onClick={() => { sendTest(); }} disabled={pending}>
-          {pending ? 'Sending…' : 'Send test event'}
-        </button>
-      </div>
+      )}
 
-      <div style={card}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Webhook endpoints (outbound)</h2>
-        {snap?.endpoints.length === 0 && <div style={{ color: '#94a3b8', marginBottom: 8 }}>No endpoints configured.</div>}
-        {snap?.endpoints.map((e) => (
-          <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
-            <div>
-              <b>{e.name}</b> <span style={{ fontSize: 12, color: '#64748b' }}>{e.url}</span>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>{e.events.join(', ') || '(none)'}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button style={{ ...btn, background: e.enabled ? '#16a34a' : '#94a3b8' }} onClick={() => startTransition(async () => { await toggleWebhookEndpoint(e.id, !e.enabled); refresh(); })}>{e.enabled ? 'Enabled' : 'Disabled'}</button>
-              <button style={{ ...btn, background: '#dc2626' }} onClick={() => startTransition(async () => { await deleteWebhookEndpoint(e.id); refresh(); })}>Delete</button>
-            </div>
+      {createdKey && (
+        <div style={{
+          padding: 16, marginBottom: 20, borderRadius: 8,
+          background: '#fefce8', border: '2px solid #fde68a',
+        }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+            Copy this API key now (won&apos;t show again):
           </div>
-        ))}
-        <div style={{ marginTop: 12 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600 }}>Add endpoint</h3>
-          <input style={inp} placeholder="Name (e.g. Verifier)" value={epName} onChange={(e) => setEpName(e.target.value)} />
-          <input style={inp} placeholder="Webhook URL (https://.../notify)" value={epUrl} onChange={(e) => setEpUrl(e.target.value)} />
-          <input style={inp} placeholder="HMAC secret (shared)" value={epSecret} onChange={(e) => setEpSecret(e.target.value)} />
-          <input style={inp} placeholder="Events (comma-separated)" value={epEvents} onChange={(e) => setEpEvents(e.target.value)} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <input type="checkbox" checked={epEnabled} onChange={(e) => setEpEnabled(e.target.checked)} /> Enabled
-          </label>
-          <button style={btn} onClick={addEndpoint} disabled={pending || !epName || !epUrl || !epSecret}>{pending ? 'Saving…' : 'Save endpoint'}</button>
+          <code style={{
+            display: 'block', padding: 12, borderRadius: 6,
+            background: '#fff', border: '1px solid #e2e8f0',
+            fontSize: 13, wordBreak: 'break-all', fontFamily: 'monospace',
+          }}>
+            {createdKey}
+          </code>
         </div>
-      </div>
+      )}
+
+      {!connected ? (
+        <button
+          style={{
+            width: '100%', padding: '14px 20px', borderRadius: 8,
+            border: 'none', background: '#010103', color: '#fff',
+            fontSize: 15, fontWeight: 600, cursor: 'pointer',
+            opacity: pending ? 0.5 : 1,
+          }}
+          onClick={generateKey}
+          disabled={pending}
+        >
+          {pending ? 'Connecting...' : 'Connect to P-Check'}
+        </button>
+      ) : (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: 16, borderRadius: 8,
+          background: '#f0fdf4', border: '1px solid #bbf7d0',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#16a34a' }} />
+            <span style={{ fontWeight: 600, fontSize: 15, color: '#166534' }}>P-Check Connected</span>
+          </div>
+          <button
+            style={{
+              padding: '6px 14px', borderRadius: 6,
+              border: '1px solid #fecaca', background: '#fff',
+              color: '#dc2626', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            }}
+            onClick={disconnect}
+            disabled={pending}
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
 
       <div style={card}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>API keys (inbound access)</h2>
-        {createdKey && (
-          <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: '#ecfccb', color: '#365314', wordBreak: 'break-all' }}>
-            <b>Copy now — shown once:</b> <code>{createdKey}</code>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Database backup</h2>
+        <p style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>
+          Create a snapshot of the live database. Files are stored in <code>backups/</code> on the server.
+        </p>
+        {backupMsg && (
+          <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: '#eef2ff', color: '#3730a3', fontSize: 13 }}>
+            {backupMsg}
           </div>
         )}
-        {snap?.apiKeys.length === 0 && <div style={{ color: '#94a3b8', marginBottom: 8 }}>No API keys generated.</div>}
-        {snap?.apiKeys.map((k) => (
-          <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
-            <div>
-              <b>{k.name}</b> <code style={{ fontSize: 12, color: '#64748b' }}>{k.prefix}…</code>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>{k.scopes.join(', ')}</div>
-              {k.revokedAt && <div style={{ fontSize: 12, color: '#dc2626' }}>revoked {k.revokedAt}</div>}
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {!k.revokedAt && (
-                <>
-                  <button style={{ ...btn, background: '#dc2626' }} onClick={() => startTransition(async () => { await revokeApiKeyAction(k.id); refresh(); })}>Revoke</button>
-                  <button style={{ ...btn, background: '#7f1d1d' }} onClick={() => startTransition(async () => { await deleteApiKeyAction(k.id); refresh(); })}>Delete</button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-        <div style={{ marginTop: 12 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600 }}>Generate key</h3>
-          <input style={inp} placeholder="Name (e.g. Verifier)" value={keyName} onChange={(e) => setKeyName(e.target.value)} />
-          <input style={inp} placeholder="Scopes (comma-separated): orders:read, webhooks:write" value={keyScopes} onChange={(e) => setKeyScopes(e.target.value)} />
-          <button style={btn} onClick={addKey} disabled={pending || !keyName}>{pending ? 'Generating…' : 'Generate key'}</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button style={btn} onClick={() => handleBackup('daily')} disabled={pending}>
+            {pending ? 'Working…' : 'Backup (Daily)'}
+          </button>
+          <button style={btn} onClick={() => handleBackup('weekly')} disabled={pending}>
+            {pending ? 'Working…' : 'Backup (Weekly)'}
+          </button>
+          <button style={btn} onClick={() => handleBackup('monthly')} disabled={pending}>
+            {pending ? 'Working…' : 'Backup (Monthly)'}
+          </button>
         </div>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Recent outbox deliveries</h2>
-        {snap?.outbox.recent.length === 0 && <div style={{ color: '#94a3b8' }}>None yet.</div>}
-        {snap?.outbox.recent.map((r) => (
-          <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 6, borderBottom: '1px solid #e2e8f0', fontSize: 13, alignItems: 'center' }}>
-            <div><b>#{r.id}</b> {r.kind} <span style={{ color: '#94a3b8' }}>(agg {r.aggregateId ?? '-'})</span></div>
-            <div style={{ color: r.status === 'SENT' ? '#16a34a' : r.status === 'FAILED' ? '#dc2626' : '#94a3b8' }}>
-              {r.status} {r.attempts > 0 ? `(attempts ${r.attempts})` : ''}
-              {r.lastError ? ` — ${r.lastError}` : ''}
-            </div>
+        {backups.length === 0 ? (
+          <div style={{ color: '#94a3b8', fontSize: 13 }}>No backups yet.</div>
+        ) : (
+          <div>
+            {backups.map((b) => (
+              <div key={b.filename} style={{ display: 'flex', justifyContent: 'space-between', padding: 8, borderBottom: '1px solid #e2e8f0', alignItems: 'center', fontSize: 13 }}>
+                <div>
+                  <b>{b.filename}</b>
+                  <div style={{ color: '#94a3b8' }}>{(b.size / 1024).toFixed(1)} KB · {new Date(b.createdAt).toLocaleString()}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <a href={`/api/v1/backup/${b.filename}`} style={{ ...btn, background: '#0284c7', textDecoration: 'none', display: 'inline-block' }}>Download</a>
+                  <button style={{ ...btn, background: '#dc2626' }} onClick={() => handleDeleteBackup(b.filename)} disabled={pending}>Delete</button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-        {loading && <div style={{ marginTop: 8, color: '#64748b' }}>Loading…</div>}
+        )}
       </div>
-
-      {staff && staff.role !== 'ADMIN' && (
-        <div style={{ color: '#dc2626', fontSize: 13 }}>You must be an administrator to manage integrations.</div>
-      )}
     </div>
   );
 }
