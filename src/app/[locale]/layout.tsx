@@ -26,6 +26,14 @@ export const metadata: Metadata = {
   description: 'Modern restaurant and cafe management POS system with Amharic and English support. Order taking, kitchen display, payments, and staff management.',
   keywords: ['restaurant', 'POS', 'point of sale', 'Ethiopian', 'Amharic', 'cafe', 'kitchen display', 'order management'],
   manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/logo.png', type: 'image/png', sizes: '1254x1254' },
+    ],
+    apple: '/logo.png',
+    shortcut: '/favicon.ico',
+  },
 };
 
 export const viewport: Viewport = {
