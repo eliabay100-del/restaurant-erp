@@ -6,15 +6,18 @@ import { formatPrice } from '@/lib/utils';
 import { processPayment } from '@/features/payments/actions';
 import { ReceiptData, ReceiptModal } from '@/components/shared/Receipt';
 import Icon from '@/components/shared/Icon';
+import PCheckVerification from './PCheckVerification';
 
 interface PaymentModalProps {
   orderId: number;
+  orderNumber?: string;
+  tableNumber?: string | null;
   total: number;
   onComplete: (payment: { method: string; amountPaid: number; change: number }) => void;
   onClose: () => void;
 }
 
-export default function PaymentModal({ orderId, total, onComplete, onClose }: PaymentModalProps) {
+export default function PaymentModal({ orderId, orderNumber, tableNumber, total, onComplete, onClose }: PaymentModalProps) {
   const t = useTranslations('payment');
   const tc = useTranslations('common');
   const locale = useLocale();
@@ -24,6 +27,7 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [pcheckMode, setPcheckMode] = useState(false);
 
   const amountNum = parseFloat(amount) || 0;
   const change = method === 'CASH' ? Math.max(0, amountNum - total) : 0;
@@ -80,6 +84,7 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
           amountDue: p.amountDue,
           changeGiven: p.changeGiven,
           reference: p.reference ?? null,
+          verificationStatus: p.verificationStatus ?? null,
         },
       });
       onComplete({ method, amountPaid: paid, change: method === 'CASH' ? Math.max(0, paid - total) : 0 });
@@ -96,6 +101,81 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
   if (receipt) {
     return <ReceiptModal data={receipt} onClose={onClose} />;
   }
+
+  if (pcheckMode) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-content" style={{ maxWidth: '500px' }}>
+          <div className="modal-header">
+            <h2>Verify with P-Check</h2>
+            <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label={tc('close')}>
+              <Icon name="x" size={18} />
+            </button>
+          </div>
+          <div className="modal-body">
+            <PCheckVerification
+              orderId={orderId}
+              orderNumber={orderNumber || `Order ${orderId}`}
+              tableNumber={tableNumber ?? null}
+              amount={total}
+              onSuccess={(transactionId) => {
+                setPcheckMode(false);
+                setReference(transactionId);
+                setMethod('MOBILE');
+                // Auto-complete payment with verified transaction
+                handlePayWithReference(transactionId);
+              }}
+              onCancel={() => setPcheckMode(false)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const handlePayWithReference = async (txnRef: string) => {
+    setLoading(true);
+    setError('');
+    const result = await processPayment(orderId, 'MOBILE', total, txnRef);
+
+    if (result.success) {
+      const o = result.order;
+      const p = result.payment;
+      setReceipt({
+        orderNumber: o.orderNumber,
+        type: o.type,
+        tableNumber: o.tableNumber,
+        subtotal: o.subtotal,
+        discount: o.discount,
+        taxAmount: o.taxAmount,
+        total: o.total,
+        note: o.note,
+        createdAt: o.createdAt.toISOString(),
+        staffName: o.staff?.name ?? '',
+        staffNameAm: o.staff?.nameAm ?? null,
+        lines: (o.items ?? []).map((i) => ({
+          nameEn: i.itemNameEn ?? '',
+          nameAm: i.itemNameAm ?? null,
+          qty: i.quantity,
+          unitPrice: i.unitPrice,
+          total: i.totalPrice,
+          note: i.note,
+        })),
+        payment: {
+          method: p.method,
+          amountPaid: p.amountPaid,
+          amountDue: p.amountDue,
+          changeGiven: p.changeGiven,
+          reference: p.reference ?? null,
+          verificationStatus: p.verificationStatus ?? null,
+        },
+      });
+      onComplete({ method: 'MOBILE', amountPaid: total, change: 0 });
+    } else {
+      setError(result.error);
+    }
+    setLoading(false);
+  };
 
   return (
     <div className="modal-overlay">
@@ -176,6 +256,32 @@ export default function PaymentModal({ orderId, total, onComplete, onClose }: Pa
               onChange={(e) => setReference(e.target.value)}
               autoFocus
             />
+          )}
+
+          {method === 'MOBILE' && (
+            <button
+              type="button"
+              onClick={() => setPcheckMode(true)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                marginTop: 'var(--space-2)',
+                borderRadius: 'var(--radius)',
+                border: '2px solid var(--accent-gold)',
+                background: 'transparent',
+                color: 'var(--accent-gold)',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <Icon name="smartphone" size={18} />
+              Or verify with P-Check
+            </button>
           )}
         </div>
         {error && (

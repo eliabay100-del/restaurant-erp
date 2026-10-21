@@ -33,6 +33,7 @@ export interface ReceiptData {
     amountDue: number;
     changeGiven: number;
     reference?: string | null;
+    verificationStatus?: string | null;
   } | null;
 }
 
@@ -125,6 +126,36 @@ export function Receipt({ data }: { data: ReceiptData }) {
               <div><span>{am ? 'ማራገጫ' : 'Ref'}</span><span>{data.payment.reference}</span></div>
             )}
           </div>
+          {data.payment.verificationStatus && (
+            <div style={{
+              marginTop: 8,
+              padding: '6px 10px',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              background: data.payment.verificationStatus === 'VERIFIED' ? '#ecfdf5' : data.payment.verificationStatus === 'DECLINED' ? '#fef2f2' : '#f8fafc',
+              color: data.payment.verificationStatus === 'VERIFIED' ? '#16a34a' : data.payment.verificationStatus === 'DECLINED' ? '#dc2626' : '#64748b',
+            }}>
+              {data.payment.verificationStatus === 'VERIFIED' && (
+                <svg width="16" height="16" viewBox="0 0 52 52" fill="none">
+                  <path d="M14 27l7.5 7.5L38 18" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+              {data.payment.verificationStatus === 'DECLINED' && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              )}
+              {data.payment.verificationStatus === 'VERIFIED'
+                ? (am ? 'ተረጋግጧል' : 'Verified')
+                : data.payment.verificationStatus === 'DECLINED'
+                  ? (am ? 'ተቀባይነት አልያዘም' : 'Declined')
+                  : (am ? 'በመጠባበቅ ላይ' : 'Pending')}
+            </div>
+          )}
         </>
       )}
 

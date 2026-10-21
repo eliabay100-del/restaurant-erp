@@ -182,19 +182,26 @@ model OrderItem {
 // ============ PAYMENTS ============
 
 model Payment {
-  id            Int      @id @default(autoincrement())
-  orderId       Int      @unique
-  order         Order    @relation(fields: [orderId], references: [id])
-  method        String   // CASH | CARD | MOBILE
-  amountPaid    Float
-  amountDue     Float
-  changeGiven   Float    @default(0)
-  tipAmount     Float    @default(0)
-  reference     String?
-  createdAt     DateTime @default(now())
+  id                  Int      @id @default(autoincrement())
+  orderId             Int      @unique
+  order               Order    @relation(fields: [orderId], references: [id])
+  method              String   // CASH | CARD | MOBILE
+  amountPaid          Float
+  amountDue           Float
+  changeGiven         Float    @default(0)
+  tipAmount           Float    @default(0)
+  reference           String?
+  verificationStatus  String?  // PENDING | VERIFIED | DECLINED | FAILED
+  verifiedAt          DateTime?
+  verifiedAmount      Float?
+  callbackSecret      String?
+  pcheckRequestId     String?  @unique
+  failureReason       String?
+  createdAt           DateTime @default(now())
 
   @@index([method])
   @@index([createdAt])
+  @@index([pcheckRequestId])
 }
 
 // ============ SALARY PAYMENTS ============

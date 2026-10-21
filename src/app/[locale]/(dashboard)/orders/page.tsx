@@ -6,6 +6,7 @@ import { getOrderHistory } from '@/features/orders/actions';
 import { formatPrice, formatTime, getStatusBadgeClass, getLocaleName } from '@/lib/utils';
 import { ORDER_STATUSES } from '@/lib/orderStatus';
 import Icon from '@/components/shared/Icon';
+import { ReceiptModal, type ReceiptData } from '@/components/shared/Receipt';
 
 interface OrderData {
   id: number;
@@ -13,11 +14,15 @@ interface OrderData {
   type: string;
   status: string;
   tableNumber: string | null;
+  subtotal: number;
+  discount: number;
+  taxAmount: number;
   total: number;
+  note: string | null;
   createdAt: string;
-  items: { id: number; itemNameEn: string; itemNameAm: string | null; quantity: number }[];
+  items: { id: number; itemNameEn: string; itemNameAm: string | null; quantity: number; unitPrice: number; totalPrice: number; note: string | null }[];
   staff: { name: string; nameAm: string | null };
-  payment: { method: string } | null;
+  payment: { method: string; amountPaid: number; amountDue: number; changeGiven: number; reference: string | null; verificationStatus: string | null } | null;
 }
 
 export default function OrdersPage() {
@@ -29,6 +34,7 @@ export default function OrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -42,6 +48,39 @@ export default function OrdersPage() {
   }, [page, statusFilter]);
 
   const statuses = ['', ...ORDER_STATUSES];
+
+  const viewReceipt = (order: OrderData) => {
+    if (!order.payment) return;
+    setReceipt({
+      orderNumber: order.orderNumber,
+      type: order.type,
+      tableNumber: order.tableNumber,
+      subtotal: order.subtotal,
+      discount: order.discount,
+      taxAmount: order.taxAmount,
+      total: order.total,
+      note: order.note,
+      createdAt: order.createdAt,
+      staffName: order.staff.name,
+      staffNameAm: order.staff.nameAm,
+      lines: order.items.map((i) => ({
+        nameEn: i.itemNameEn,
+        nameAm: i.itemNameAm,
+        qty: i.quantity,
+        unitPrice: i.unitPrice,
+        total: i.totalPrice,
+        note: i.note,
+      })),
+      payment: {
+        method: order.payment.method,
+        amountPaid: order.payment.amountPaid,
+        amountDue: order.payment.amountDue,
+        changeGiven: order.payment.changeGiven,
+        reference: order.payment.reference,
+        verificationStatus: order.payment.verificationStatus,
+      },
+    });
+  };
 
   return (
     <div>
@@ -99,6 +138,15 @@ export default function OrdersPage() {
                             </div>
                           ))}
                         </div>
+                        {order.payment && (
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={(e) => { e.stopPropagation(); viewReceipt(order); }}
+                            style={{ height: 'fit-content' }}
+                          >
+                            <Icon name="creditCard" size={16} /> View Receipt
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -120,6 +168,8 @@ export default function OrdersPage() {
           <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} aria-label="Next page"><Icon name="chevronRight" size={16} /></button>
         </div>
       )}
+
+      {receipt && <ReceiptModal data={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );
 }

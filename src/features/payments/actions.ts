@@ -5,6 +5,7 @@ import { authorize, FLOOR_ROLES, ALL_ROLES } from '@/lib/auth';
 import { parseMoney, roundMoney } from '@/lib/money';
 import type { Prisma, Payment } from '@prisma/client';
 import { emitOutboundEvent } from '@/lib/integrations/outbox';
+import { verifyPayment } from '@/lib/pcheck';
 
 const PAYMENT_METHODS = ['CASH', 'CARD', 'MOBILE'] as const;
 type PaymentMethod = (typeof PAYMENT_METHODS)[number];
@@ -77,6 +78,35 @@ export async function processPayment(
         reference,
       },
     });
+
+    // For mobile payments, verify with P-Check
+    let verificationStatus: string | null = null;
+    let verifiedAt: Date | null = null;
+    
+    if (method === 'MOBILE' && reference) {
+      const verification = await verifyPayment(
+        reference,
+        'verify_et', // Default provider, could be auto-detected from reference
+        tendered,
+        'ETB'
+      );
+      
+      verificationStatus = verification.status === 'verified' ? 'VERIFIED' : 
+                          verification.status === 'declined' ? 'DECLINED' : 'PENDING';
+      
+      if (verification.status === 'verified') {
+        verifiedAt = new Date();
+      }
+      
+      // Update payment with verification status
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          verificationStatus,
+          verifiedAt,
+        },
+      });
+    }
 
     const fullOrder = await prisma.order.findUnique({
       where: { id: orderId },

@@ -14,44 +14,69 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: 'Missing scope: webhooks:write' }, { status: 403 });
   }
 
-  let body: { orderId?: unknown; verdict?: unknown; reference?: unknown; idempotencyKey?: unknown };
+  let body: { orderId?: unknown; verdict?: unknown; reference?: unknown; idempotencyKey?: unknown; event?: unknown; data?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const orderId = Number(body?.orderId);
-  if (!Number.isInteger(orderId) || orderId <= 0) {
-    return NextResponse.json({ success: false, error: 'Invalid orderId' }, { status: 400 });
+  // Support both old format (verdict/reference) and new event format (event/data)
+  let verdict: string | undefined;
+  let ref: string | null = null;
+  let rawOrderId: unknown;
+
+  if (body?.event === 'verification.completed' && body?.data && typeof body.data === 'object') {
+    const data = body.data as Record<string, unknown>;
+    ref = typeof data.transaction_id === 'string' ? data.transaction_id : null;
+    rawOrderId = data.order_id;
+    verdict = data.status === 'verified' ? 'verified' : 'declined';
+  } else {
+    verdict = body?.verdict as string | undefined;
+    ref = typeof body?.reference === 'string' ? body.reference : null;
+    rawOrderId = body?.orderId;
   }
-  const verdict = body?.verdict;
+
   if (verdict !== 'verified' && verdict !== 'declined' && verdict !== 'void') {
     return NextResponse.json({ success: false, error: 'Invalid verdict' }, { status: 400 });
   }
 
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  let order: { id: number; note: string | null } | null = null;
+
+  if (Number.isInteger(rawOrderId) && (rawOrderId as number) > 0) {
+    order = await prisma.order.findUnique({ where: { id: rawOrderId as number } });
+  }
+
+  if (!order && ref) {
+    const payment = await prisma.payment.findFirst({ where: { reference: ref } });
+    if (payment) {
+      order = await prisma.order.findUnique({ where: { id: payment.orderId } });
+    }
+  }
+
   if (!order) {
-    return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
+    return NextResponse.json(
+      { success: false, error: rawOrderId ? 'Order not found' : 'No matching order found for reference' },
+      { status: 404 }
+    );
   }
 
-  const idempotencyKey = typeof body?.idempotencyKey === 'string' ? body.idempotencyKey : null;
-  const noteToken = idempotencyKey ? `verifier:${idempotencyKey}` : `verifier:${verdict}:${orderId}`;
-  if (order.note && order.note.includes(noteToken)) {
-    return NextResponse.json({ success: true, data: { orderId, verdict, applied: false }, meta: { requestId: crypto.randomUUID(), issuedAt: new Date().toISOString() } });
-  }
+  const verificationStatus = verdict === 'verified' ? 'VERIFIED' : verdict === 'void' ? null : 'DECLINED';
 
-  const ref = typeof body?.reference === 'string' ? body.reference : null;
-  const annotation = ` [Verifier ${verdict}${ref ? ` ref:${ref}` : ''} ${noteToken}]`;
-  const suffix = verdict === 'void' ? ' (order voided by verifier)' : '';
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { note: (order.note ?? '') + annotation + suffix },
-  });
+  const payment = await prisma.payment.findFirst({ where: { orderId: order.id } });
+  if (payment) {
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        verificationStatus,
+        verifiedAt: new Date(),
+      },
+    });
+  }
 
   return NextResponse.json({
     success: true,
-    data: { orderId, verdict, applied: true },
+    data: { orderId: order.id, verdict, applied: true },
     meta: { requestId: crypto.randomUUID(), issuedAt: new Date().toISOString() },
   });
 }

@@ -14,11 +14,13 @@
     "db:reset": "npx prisma db push --force-reset && npx tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@eliabay100-del/pcheck-erp-sdk": "file:../../pcheck/packages/pcheck-erp-sdk",
     "@prisma/client": "^6.9.0",
     "bcryptjs": "^2.4.3",
     "html2canvas": "^1.4.1",
     "next": "16.3.4",
     "next-intl": "^4.1.0",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "socket.io": "^4.8.0",
