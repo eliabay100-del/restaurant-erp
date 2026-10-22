@@ -35,18 +35,7 @@ export async function POST(request: NextRequest) {
       await prisma.payment.update({
         where: { id: payment.id },
         data: {
-          status: 'verified',
-          verifiedAmount: webhook.data.verified_amount,
-          verifiedAt: new Date(),
-        },
-      });
-
-      // Mark order as paid
-      await prisma.order.update({
-        where: { id: payment.orderId },
-        data: { 
-          status: 'paid',
-          paidAt: new Date(),
+          reference: webhook.data.id,
         },
       });
 
@@ -56,14 +45,6 @@ export async function POST(request: NextRequest) {
         amount: webhook.data.verified_amount,
       });
     } else {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { 
-          status: 'failed',
-          failureReason: webhook.data.status,
-        },
-      });
-
       console.warn('Payment verification failed:', {
         paymentId: payment.id,
         status: webhook.data.status,

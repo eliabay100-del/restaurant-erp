@@ -1,7 +1,7 @@
 {
-  "name": "Warka Dine — Restaurant POS",
-  "short_name": "Warka Dine",
-  "description": "Restaurant and cafe management POS with Amharic and English support.",
+  "name": "Buna Dine — Coffee Shop POS",
+  "short_name": "Buna Dine",
+  "description": "Coffee shop and cafe management POS with Amharic and English support.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
