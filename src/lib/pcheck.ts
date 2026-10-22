@@ -24,7 +24,7 @@ export async function verifyPayment(
     });
 
     return {
-      status: result.verified ? 'verified' : result.status === 'failed' ? 'declined' : 'pending',
+      status: result.status === 'verified' ? 'verified' : result.status === 'failed' ? 'declined' : 'pending',
       data: result,
     };
   } catch (error) {
