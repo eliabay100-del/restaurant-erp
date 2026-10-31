@@ -5,6 +5,7 @@ import { decryptSecret } from '@/lib/integrations/secrets';
 export type OutboundEventKind =
   | 'order.created'
   | 'order.status.changed'
+  | 'order.items.added'
   | 'payment.completed';
 
 export interface EmitOutboundEventArgs {

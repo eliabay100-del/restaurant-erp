@@ -11,14 +11,16 @@ import {
   READY_FOR_PICKUP,
   isOrderItemStatus,
   isOrderStatus,
+  rollUpOrderStatus,
 } from '@/lib/orderStatus';
 
 interface CreateOrderInput {
   type: string;
   tableNumber?: string;
   note?: string;
-  /** Whole-amount discount in ETB. Only management may set it. */
   discount?: number;
+  clientKey?: string;
+  autoConfirm?: boolean;
   items: {
     menuItemId: number;
     variantId?: number;
@@ -73,7 +75,16 @@ export async function createOrder(input: CreateOrderInput) {
       discount = parsedDiscount;
     }
 
-    // Get menu items and variants for price snapshot
+    // Idempotency: replay with an existing clientKey returns the original order.
+    if (input.clientKey) {
+      const existing = await prisma.order.findUnique({
+        where: { clientKey: input.clientKey },
+        include: { items: { include: { menuItem: true } }, staff: { select: { name: true, nameAm: true } }, payment: true },
+      });
+      if (existing) {
+        return { success: true, order: existing, replayed: true } as any;
+      }
+    }
     const menuItemIds = input.items.map((i) => i.menuItemId);
     const variantIds = input.items.map((i) => i.variantId).filter(Boolean) as number[];
     
@@ -130,6 +141,7 @@ export async function createOrder(input: CreateOrderInput) {
         totalPrice: unitPrice * item.quantity,
         note: item.note,
         status: 'PENDING',
+        requiresTicket: menuItem.requiresTicket,
       };
     });
 
@@ -147,6 +159,7 @@ export async function createOrder(input: CreateOrderInput) {
         orderNumber,
         type: input.type,
         status: 'PENDING',
+        clientKey: input.clientKey ?? null,
         tableNumber: input.tableNumber,
         staffId,
         shiftId,
@@ -186,8 +199,37 @@ export async function createOrder(input: CreateOrderInput) {
       createdAt: order.createdAt ?? new Date().toISOString(),
     });
 
+    // Auto-confirm: move to PREPARING and stamp confirmedAt.
+    if (input.autoConfirm) {
+      try {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            status: 'PREPARING',
+            confirmedByStaffId: staffId,
+            confirmedAt: new Date(),
+            items: { updateMany: { where: { orderId: order.id }, data: { status: 'PREPARING' } } },
+          },
+        });
+        await emitOutboundEvent(prisma, 'order.status.changed', order.id, {
+          orderId: order.id,
+          newStatus: 'PREPARING',
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Auto-confirm failed:', e);
+      }
+    }
+
     return { success: true, order };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002' && input.clientKey) {
+      const existing = await prisma.order.findUnique({
+        where: { clientKey: input.clientKey },
+        include: { items: { include: { menuItem: true } }, staff: { select: { name: true, nameAm: true } }, payment: true },
+      });
+      if (existing) return { success: true, order: existing, replayed: true } as any;
+    }
     console.error('Create order error:', error);
     return { success: false, error: 'Failed to create order' };
   }
@@ -200,6 +242,16 @@ export async function updateOrderStatus(orderId: number, status: string) {
 
     if (!isOrderStatus(status)) {
       return { success: false, error: `Unknown order status: ${status}` };
+    }
+
+    const existing = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
+    if (!existing) return { success: false, error: 'Order not found' };
+    if (existing.status === 'CANCELLED') return { success: false, error: 'Order is cancelled' };
+    if (existing.status === 'SERVED' && status !== 'SERVED') {
+      return { success: false, error: 'Cannot move a served order backwards' };
+    }
+    if (status === 'CANCELLED') {
+      return { success: false, error: 'Use cancelOrder to cancel' };
     }
 
     const order = await prisma.order.update({
@@ -369,38 +421,198 @@ export async function getOrderHistory(page: number = 1, limit: number = 20, stat
   }
 }
 
-export async function cancelOrder(orderId: number) {
+export async function startOrderInKitchen(orderId: number) {
   try {
-    const auth = await authorize(MANAGEMENT_ROLES);
+    const auth = await authorize(ALL_ROLES);
     if (!auth.ok) return { success: false, error: auth.error };
 
-    const staffId = auth.session.staffId;
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true, payment: true } });
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.status === 'READY' || order.status === 'SERVED' || order.status === 'CANCELLED') {
+      return { success: false, error: 'Order cannot be started' };
+    }
 
-    const order = await prisma.order.update({
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: 'PREPARING',
+        confirmedByStaffId: auth.session.staffId,
+        confirmedAt: order.confirmedAt ?? new Date(),
+        items: { updateMany: { where: { orderId }, data: { status: 'PREPARING' } } },
+      },
+    });
+
+    await emitOutboundEvent(prisma, 'order.status.changed', orderId, {
+      orderId,
+      newStatus: 'PREPARING',
+      updatedAt: new Date().toISOString(),
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Start order in kitchen error:', error);
+    return { success: false, error: 'Failed to start order' };
+  }
+}
+
+export async function confirmOrderAction(orderId: number) {
+  return startOrderInKitchen(orderId);
+}
+
+export async function markOrderServed(orderId: number) {
+  try {
+    const auth = await authorize(ALL_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.status === 'CANCELLED') return { success: false, error: 'Order is cancelled' };
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: 'SERVED',
+        items: { updateMany: { where: { orderId }, data: { status: 'SERVED' } } },
+      },
+    });
+
+    await emitOutboundEvent(prisma, 'order.status.changed', orderId, {
+      orderId,
+      newStatus: 'SERVED',
+      updatedAt: new Date().toISOString(),
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Mark served error:', error);
+    return { success: false, error: 'Failed to mark served' };
+  }
+}
+
+export async function cancelOrder(orderId: number, reason?: string) {
+  try {
+    const auth = await authorize(ALL_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    if (!['ADMIN', 'MANAGER', 'KITCHEN'].includes(auth.session.role)) {
+      return { success: false, error: 'Not authorized to cancel' };
+    }
+
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { payment: true } });
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.status === 'CANCELLED') return { success: true };
+    if (order.payment) return { success: false, error: 'Cannot cancel a paid order' };
+
+    await prisma.order.update({
       where: { id: orderId },
       data: {
         status: 'CANCELLED',
-        items: {
-          updateMany: {
-            where: { orderId },
-            data: { status: 'CANCELLED' },
-          },
-        },
+        items: { updateMany: { where: { orderId }, data: { status: 'CANCELLED' } } },
+        note: reason ? `${order.note ?? ''} [CANCELLED: ${reason}]`.trim() : order.note,
       },
     });
 
-    // Log the cancellation
     await prisma.auditLog.create({
       data: {
-        staffId,
+        staffId: auth.session.staffId,
         action: 'ORDER_CANCEL',
-        details: JSON.stringify({ orderId, orderNumber: order.orderNumber }),
+        details: JSON.stringify({ orderId, orderNumber: order.orderNumber, reason: reason ?? null, paymentStatus: order.payment ? 'PAID' : 'UNPAID' }),
       },
     });
 
-    return { success: true, order };
+    await emitOutboundEvent(prisma, 'order.status.changed', orderId, {
+      orderId,
+      newStatus: 'CANCELLED',
+      updatedAt: new Date().toISOString(),
+    });
+
+    return { success: true };
   } catch (error) {
     console.error('Cancel order error:', error);
     return { success: false, error: 'Failed to cancel order' };
+  }
+}
+
+export async function addItemsToOrder(orderId: number, items: { menuItemId: number; variantId?: number; quantity: number; note?: string; overridePrice?: number }[], clientKey?: string) {
+  try {
+    const auth = await authorize(ALL_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    if (clientKey) {
+      const existing = await prisma.auditLog.findFirst({ where: { action: 'ORDER_ADD_ITEMS', details: { contains: clientKey } } });
+      if (existing) return { success: true, replayed: true };
+    }
+
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true, payment: true } });
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.status === 'CANCELLED' || order.status === 'SERVED') return { success: false, error: 'Order is no longer editable' };
+    if (order.payment) return { success: false, error: 'Cannot add items to a paid order' };
+
+    const menuItemIds = items.map((i) => i.menuItemId);
+    const variantIds = items.map((i) => i.variantId).filter(Boolean) as number[];
+    const menuItems = await prisma.menuItem.findMany({ where: { id: { in: menuItemIds } } });
+    const variants = await prisma.menuVariant.findMany({ where: { id: { in: variantIds } } });
+    const menuItemMap = new Map(menuItems.map((mi) => [mi.id, mi]));
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
+
+    const newLines = items.map((item) => {
+      const menuItem = menuItemMap.get(item.menuItemId);
+      if (!menuItem) throw new Error('Menu item ' + item.menuItemId + ' not found');
+      let unitPrice = menuItem.price;
+      let itemNameEn = menuItem.nameEn;
+      let itemNameAm = menuItem.nameAm;
+      if (item.variantId) {
+        const variant = variantMap.get(item.variantId);
+        if (variant) {
+          unitPrice += variant.priceOffset;
+          itemNameEn = menuItem.nameEn + ' (' + variant.nameEn + ')';
+          if (menuItem.nameAm && variant.nameAm) itemNameAm = menuItem.nameAm + ' (' + variant.nameAm + ')';
+        }
+      }
+      if (item.overridePrice !== undefined) unitPrice = item.overridePrice;
+      return {
+        orderId,
+        menuItemId: item.menuItemId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        unitPrice,
+        itemNameEn,
+        itemNameAm,
+        totalPrice: unitPrice * item.quantity,
+        note: item.note,
+        status: order.status === 'PENDING' ? 'PENDING' : 'PREPARING',
+        requiresTicket: menuItem.requiresTicket,
+      };
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.orderItem.createMany({ data: newLines });
+      const allItems = await tx.orderItem.findMany({ where: { orderId } });
+      const subtotal = allItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+      const discount = order.discount;
+      const taxRate = order.taxRate;
+      const taxable = subtotal - discount;
+      const taxAmount = Math.round((taxable * taxRate + Number.EPSILON) * 100) / 100;
+      const total = taxable + taxAmount;
+      await tx.order.update({
+        where: { id: orderId },
+        data: { subtotal, taxAmount, total },
+      });
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        staffId: auth.session.staffId,
+        action: 'ORDER_ADD_ITEMS',
+        details: JSON.stringify({ orderId, clientKey: clientKey ?? null, addedCount: items.length }),
+      },
+    });
+
+    await emitOutboundEvent(prisma, 'order.items.added', orderId, { orderId, addedCount: items.length });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Add items to order error:', error);
+    return { success: false, error: 'Failed to add items' };
   }
 }
