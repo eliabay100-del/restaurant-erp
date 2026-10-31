@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "node server.js --production",
     "lint": "eslint",
+    "test": "vitest run",
     "db:push": "npx prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
@@ -32,11 +33,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/ui": "^2.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "prisma": "^6.9.0",
     "tsx": "^4.23.13",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.0.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
