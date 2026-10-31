@@ -338,5 +338,84 @@
       "bag": "ከረጢት",
       "bottle": "ጠርሙስ"
     }
+  },
+  "reconciliation": {
+    "title": "የእቃ ማስታረቅ",
+    "subtitle": "የምግብ አዘገጃጀት፣ የእቃ ድልድል እና ስሌት በአንድ ቦታ።",
+    "tabs": {
+      "recipes": "ምናሌ እና አዘገጃጀት አስተካክል",
+      "assign": "እቃ ድልድል",
+      "settlement": "ስሌት"
+    },
+    "recipes": {
+      "intro": "የምናሌ እቃ ይምረጡ፣ ከዚያ አንድ የሚመዘን ወይም የሚቆጠር እቃ ስንት እቃ እንደሚሰጥ ይንገሩት።",
+      "selectItem": "የምናሌ እቃ",
+      "search": "የምናሌ እቃ ፈልግ",
+      "stockItem": "የእቃ ዓይነት",
+      "stockQuantity": "የእቃ መጠን",
+      "unitsProduced": "የተመረቱ እቃዎች",
+      "perUnit": "በእያንዳንዱ እቃ",
+      "preview": "{stock} {unit} {units} እቃ ይሰጣል — እያንዳንዱ {per} {unit}",
+      "save": "አዘገጃጀት አስቀምጥ",
+      "update": "አዘገጃጀት አስተካክል",
+      "saved": "አዘገጃጀት ተቀምጧል።",
+      "noRecipe": "እስካሁን አዘገጃጀት የለም። የመጀመሪያውን የእቃ መስመር ከታች ይጨምሩ።",
+      "remove": "አስወግድ",
+      "edit": "አስተካክል",
+      "editing": "በማስተካከል ላይ",
+      "cancel": "ሰርዝ",
+      "existing": "ያለ አዘገጃጀት",
+      "example": "ምሳሌ፡ 1 ኪሎ ቡና = 1000 ግራም። 100 ስኒ ከሚሰጥ 1000 ግራም እና 100 ስኒ ያስገቡ።"
+    },
+    "assign": {
+      "intro": "ለቡና/ኩሽና ለተወሰነ ጊዜ የሚሰጠውን እቃ ይመድቡ።",
+      "period": "ጊዜ",
+      "today": "ዛሬ",
+      "thisWeek": "ይህ ሳምንት",
+      "thisMonth": "ይህ ወር",
+      "custom": "ብጁ",
+      "from": "ከ",
+      "to": "እስከ",
+      "item": "የእቃ ዓይነት",
+      "currentStock": "ያለ እቃ",
+      "assigned": "የተመደበ",
+      "note": "ማስታወሻ",
+      "save": "ድልድል አስቀምጥ",
+      "saved": "እቃ ተመድቧል።",
+      "totalAssigned": "ጠቅላላ የተመደበ",
+      "itemsAssigned": "የተመደቡ እቃዎች",
+      "inventoryItems": "የእቃ ዓይነቶች",
+      "empty": "እስካሁን የእቃ ዓይነት የለም።"
+    },
+    "settlement": {
+      "intro": "ወደ ኩሽና/ባሪስታ የተላከ እያንዳንዱ ትኬት ያለው ትዕዛዝ ከተመደበው እቃ ጋር ተነጻጽሮ ይታያል።",
+      "orders": "ትኬት ያላቸው ትዕዛዞች",
+      "expected": "የሚጠበቅ ፍጆታ",
+      "remaining": "የተመደበ − የሚጠበቅ",
+      "over": "ከመጠን በላይ ፍጆታ",
+      "ok": "ተሸፍኗል",
+      "unassigned": "ድልድል የለም",
+      "status": "ሁኔታ",
+      "totalAssigned": "የተመደበ",
+      "totalExpected": "የሚጠበቅ",
+      "itemsAssigned": "የተመደቡ እቃዎች",
+      "itemsUsed": "ፍጆታ ያላቸው እቃዎች",
+      "items": "እቃዎች",
+      "orderNumber": "ትዕዛዝ",
+      "time": "ሰዓት",
+      "staff": "ሰራተኛ",
+      "usage": "ፍጆታ",
+      "noOrders": "በዚህ ጊዜ ውስጥ በኩሽና የተረጋገጡ ትዕዛዞች የሉም።",
+      "noAssignment": "ለዚህ ጊዜ እስካሁን እቃ አልተመደበም።",
+      "kitchen": "ኩሽና",
+      "refresh": "አድስ"
+    },
+    "common": {
+      "unit": "መለኪያ",
+      "save": "አስቀምጥ",
+      "saving": "በማስቀመጥ ላይ…",
+      "loading": "በመጫን ላይ…",
+      "none": "—"
+    }
   }
 }

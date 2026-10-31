@@ -338,5 +338,84 @@
       "bag": "Bag",
       "bottle": "Bottle"
     }
+  },
+  "reconciliation": {
+    "title": "Inventory Reconciliation",
+    "subtitle": "Recipes, stock assignments and settlement in one place.",
+    "tabs": {
+      "recipes": "Edit Menu & Recipes",
+      "assign": "Assign Stock",
+      "settlement": "Settlement"
+    },
+    "recipes": {
+      "intro": "Choose a menu item, then tell the system how many items one weighed or counted stock produces.",
+      "selectItem": "Menu item",
+      "search": "Search menu items",
+      "stockItem": "Stock item",
+      "stockQuantity": "Stock quantity",
+      "unitsProduced": "Items produced",
+      "perUnit": "Used per item",
+      "preview": "{stock} {unit} produces {units} item(s) — {per} {unit} each",
+      "save": "Save recipe line",
+      "update": "Update recipe line",
+      "saved": "Recipe saved.",
+      "noRecipe": "No recipe yet. Add the first stock line below.",
+      "remove": "Remove",
+      "edit": "Edit",
+      "editing": "Editing",
+      "cancel": "Cancel",
+      "existing": "Existing recipe",
+      "example": "Example: 1 kg coffee beans = 1000 g. If it makes 100 cups, enter 1000 g and 100 cups."
+    },
+    "assign": {
+      "intro": "Assign the stock handed to the bar/kitchen for a period.",
+      "period": "Period",
+      "today": "Today",
+      "thisWeek": "This week",
+      "thisMonth": "This month",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To",
+      "item": "Inventory item",
+      "currentStock": "Current stock",
+      "assigned": "Assigned",
+      "note": "Note",
+      "save": "Save assignments",
+      "saved": "Stock assigned.",
+      "totalAssigned": "Total assigned",
+      "itemsAssigned": "Items assigned",
+      "inventoryItems": "Inventory items",
+      "empty": "No inventory items yet."
+    },
+    "settlement": {
+      "intro": "Every ticketed order sent to the kitchen/barista, compared with the stock assigned for the period.",
+      "orders": "Ticketed orders",
+      "expected": "Expected usage",
+      "remaining": "Assigned − expected",
+      "over": "Over-assigned usage",
+      "ok": "Covered",
+      "unassigned": "No assignment",
+      "status": "Status",
+      "totalAssigned": "Assigned",
+      "totalExpected": "Expected",
+      "itemsAssigned": "Items assigned",
+      "itemsUsed": "Items with usage",
+      "items": "Items",
+      "orderNumber": "Order",
+      "time": "Time",
+      "staff": "Staff",
+      "usage": "Usage",
+      "noOrders": "No kitchen-confirmed orders in this period.",
+      "noAssignment": "No stock assigned for this period yet.",
+      "kitchen": "Kitchen",
+      "refresh": "Refresh"
+    },
+    "common": {
+      "unit": "Unit",
+      "save": "Save",
+      "saving": "Saving…",
+      "loading": "Loading…",
+      "none": "—"
+    }
   }
 }
