@@ -28,3 +28,10 @@ export function isOrderStatus(value: unknown): value is OrderStatus {
 export function isOrderItemStatus(value: unknown): value is OrderItemStatus {
   return typeof value === 'string' && (ORDER_ITEM_STATUSES as readonly string[]).includes(value);
 }
+
+export function rollUpOrderStatus(items: { status: string }[]): OrderStatus {
+  if (items.length === 0) return 'PENDING';
+  if (items.every((i) => i.status === 'SERVED')) return 'SERVED';
+  if (items.some((i) => i.status !== 'PENDING')) return 'PREPARING';
+  return 'PENDING';
+}

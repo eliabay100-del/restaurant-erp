@@ -11,6 +11,12 @@
 /** VAT rate applied to orders. */
 export const TAX_RATE = 0.15;
 
+/** Convert minor units (santim) to major units (ETB). Warka stores money in
+ *  major units already, so this is an identity pass-through. */
+export function fromSantim(value: number): number {
+  return value;
+}
+
 /** Round to 2 decimal places (santim), free of float artefacts. */
 export function roundMoney(amount: number): number {
   if (!Number.isFinite(amount)) return 0;

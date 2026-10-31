@@ -29,9 +29,13 @@ model Staff {
   updatedAt   DateTime @updatedAt
 
   shifts         Shift[]
+  shiftsClosed   Shift[]           @relation("ShiftClosedBy")
   orders         Order[]
+  ordersConfirmed Order[]          @relation("OrderConfirmedBy")
+  paymentsReceived Payment[]       @relation("PaymentReceivedBy")
   auditLogs      AuditLog[]
   salaryPayments SalaryPayment[]
+  stockAssignments StockAssignment[] @relation("StockAssignmentBy")
 
   @@index([role])
   @@index([isActive])
@@ -51,15 +55,58 @@ model Shift {
   status         String    @default("OPEN") // OPEN | PENDING_APPROVAL | APPROVED | REJECTED
   notes          String?
   approvedById   Int?
+  closedById     Int?
+  closedBy       Staff?    @relation("ShiftClosedBy", fields: [closedById], references: [id])
+  cashVariance   Float?
 
   orders         Order[]
+  payments       Payment[]
+  stockCounts    ShiftStockCount[]
+  inventoryTransactions InventoryTransaction[]
 
   @@index([staffId])
   @@index([status])
   @@index([startTime])
 }
 
+model StockAssignment {
+  id              Int           @id @default(autoincrement())
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Float
+  periodType      String        @default("WEEK") // DAY | WEEK | MONTH | CUSTOM
+  periodStart     DateTime
+  periodEnd       DateTime
+  note            String?
+  assignedById    Int?
+  assignedBy      Staff?        @relation("StockAssignmentBy", fields: [assignedById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([inventoryItemId, periodStart, periodEnd])
+  @@index([inventoryItemId])
+  @@index([periodStart, periodEnd])
+}
+
 // ============ MENU ============
+
+model ShiftStockCount {
+  id            Int           @id @default(autoincrement())
+  shiftId       Int
+  shift         Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  stockItemId   Int
+  stockItem     InventoryItem @relation(fields: [stockItemId], references: [id])
+  assigned      Int           @default(0)
+  expectedUsage Int           @default(0)
+  closingCount  Int?
+  variance      Int?
+  note          String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([shiftId, stockItemId])
+  @@index([shiftId])
+}
 
 model Category {
   id        Int        @id @default(autoincrement())
@@ -91,10 +138,18 @@ model MenuItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  orderItems  OrderItem[]
+  // PRODUCT | FEE (fee items hidden from public menu, valid order line when added by management)
+  kind                     String     @default("PRODUCT")
+  requiresTicket           Boolean    @default(true)
+  // Daily time-window price increase (fixed amount added while active).
+  scheduledIncrease        Float      @default(0)
+  scheduledIncreaseStart   Int        @default(120) // minutes from midnight, 02:00
+  scheduledIncreaseEnd     Int        @default(360) // minutes from midnight, 06:00
+  scheduledIncreaseEnabled Boolean    @default(false)
 
-  variants    MenuVariant[]
-  ingredients RecipeIngredient[]
+  orderItems   OrderItem[]
+  variants     MenuVariant[]
+  ingredients  RecipeIngredient[]
 
   @@index([categoryId])
   @@index([isAvailable])
@@ -110,6 +165,12 @@ model MenuVariant {
   priceOffset Float    @default(0) // Usually 0 for same-price variants
   isActive    Boolean  @default(true)
 
+  // Variant-specific scheduled price increase (added on top of the item's).
+  scheduledIncrease        Float      @default(0)
+  scheduledIncreaseStart   Int        @default(120)
+  scheduledIncreaseEnd     Int        @default(360)
+  scheduledIncreaseEnabled Boolean    @default(false)
+
   orderItems  OrderItem[]
 
   @@index([menuItemId])
@@ -124,6 +185,10 @@ model RecipeIngredient {
   quantity        Float         // Amount deducted per order
   unit            String        // Must match inventory item unit
 
+  // Yield definition: stock quantity produces yieldUnits menu items.
+  yieldStockQuantity Int?
+  yieldUnits         Int?
+
   @@index([menuItemId])
   @@index([inventoryItemId])
 }
@@ -133,8 +198,10 @@ model RecipeIngredient {
 model Order {
   id          Int         @id @default(autoincrement())
   orderNumber String      @unique
-  type        String      @default("DINE_IN") // DINE_IN | TAKEOUT
+  type        String      @default("DINE_IN") // DINE_IN | TAKEOUT | DINE_IN_QR (channel)
   status      String      @default("PENDING") // PENDING | PREPARING | READY | SERVED | CANCELLED
+  paymentStatus String    @default("UNPAID") // UNPAID | PAID
+  clientKey   String?     @unique
   tableNumber String?
   staffId     Int
   staff       Staff       @relation(fields: [staffId], references: [id])
@@ -146,6 +213,9 @@ model Order {
   discount    Float       @default(0)
   total       Float       @default(0)
   note        String?
+  confirmedByStaffId Int?
+  confirmedBy Staff?      @relation("OrderConfirmedBy", fields: [confirmedByStaffId], references: [id])
+  confirmedAt DateTime?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -153,6 +223,7 @@ model Order {
   payment     Payment?
 
   @@index([status])
+  @@index([paymentStatus])
   @@index([createdAt])
   @@index([staffId])
   @@index([shiftId])
@@ -173,6 +244,7 @@ model OrderItem {
   itemNameAm   String?
   totalPrice   Float
   status       String   @default("PENDING") // PENDING | PREPARING | READY | SERVED
+  requiresTicket Boolean  @default(true)
   note         String?
 
   @@index([orderId])
@@ -197,7 +269,11 @@ model Payment {
   callbackSecret      String?
   pcheckRequestId     String?  @unique
   failureReason       String?
-  createdAt           DateTime @default(now())
+  receivedByStaffId  Int?
+  receivedBy         Staff?   @relation("PaymentReceivedBy", fields: [receivedByStaffId], references: [id])
+  shiftId            Int?
+  shift              Shift?   @relation(fields: [shiftId], references: [id])
+  createdAt          DateTime @default(now())
 
   @@index([method])
   @@index([createdAt])
@@ -240,11 +316,14 @@ model InventoryItem {
   reorderLevel  Float     @default(0)
   supplier      String?
   isActive      Boolean   @default(true)
+  tracked       Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   transactions  InventoryTransaction[]
   ingredients   RecipeIngredient[]
+  stockCounts   ShiftStockCount[]
+  stockAssignments StockAssignment[]
 
   @@index([category])
   @@index([isActive])
@@ -260,10 +339,14 @@ model InventoryTransaction {
   totalCost       Float          @default(0)
   note            String?
   staffId         Int?
+  shiftId         Int?
+  shift           Shift?         @relation(fields: [shiftId], references: [id])
+  reason          String?
   createdAt       DateTime       @default(now())
 
   @@index([inventoryItemId])
   @@index([type])
+  @@index([shiftId])
   @@index([createdAt])
 }
 
@@ -275,10 +358,14 @@ model AuditLog {
   staff     Staff    @relation(fields: [staffId], references: [id])
   action    String
   details   String?
+  entity    String?
+  before    String?
+  after     String?
   createdAt DateTime @default(now())
 
   @@index([staffId])
   @@index([action])
+  @@index([entity])
   @@index([createdAt])
 }
 
