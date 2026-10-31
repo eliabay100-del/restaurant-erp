@@ -52,7 +52,8 @@ model Shift {
   openingCash    Float     @default(0)
   closingCash    Float?
   expectedCash   Float?
-  status         String    @default("OPEN") // OPEN | PENDING_APPROVAL | APPROVED | REJECTED
+  status         String    @default("OPEN") // OPEN | CLOSED
+  approvalStatus String    @default("NONE") // NONE | PENDING_APPROVAL | APPROVED | REJECTED
   notes          String?
   approvedById   Int?
   closedById     Int?

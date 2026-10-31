@@ -206,6 +206,15 @@ export async function endShift(shiftId: number, closingCash: number, notes?: str
       return { success: false, error: 'Shift not found' };
     }
 
+    // Non-managers may only close their own shift.
+    const isManager = MANAGEMENT_ROLES.includes(auth.session.role);
+    if (!isManager && shift.staffId !== auth.session.staffId) {
+      return { success: false, error: 'You can only close your own shift' };
+    }
+    if (shift.status !== 'OPEN') {
+      return { success: false, error: 'Shift is already closed' };
+    }
+
     const cashReceived = cashPayments.reduce((sum, p) => sum + p.amountPaid - p.changeGiven, 0);
     const expectedCash = shift.openingCash + cashReceived;
 
@@ -224,7 +233,10 @@ export async function endShift(shiftId: number, closingCash: number, notes?: str
         endTime: new Date(),
         closingCash,
         expectedCash,
-        status: 'PENDING_APPROVAL',
+        cashVariance: closingCash - expectedCash,
+        status: 'CLOSED',
+        approvalStatus: 'PENDING_APPROVAL',
+        closedById: auth.session.staffId,
         notes,
       },
     });
@@ -280,7 +292,7 @@ export async function approveShift(shiftId: number, approvedById: number) {
       prisma.shift.update({
         where: { id: shiftId },
         data: {
-          status: 'APPROVED',
+          approvalStatus: 'APPROVED',
           approvedById,
         },
       }),
@@ -316,9 +328,11 @@ export async function rejectShift(shiftId: number, rejectedById: number) {
         where: { id: shiftId },
         data: {
           status: 'OPEN',
+          approvalStatus: 'REJECTED',
           approvedById: rejectedById,
           closingCash: null,
           expectedCash: null,
+          cashVariance: null,
           endTime: null,
         },
       }),
