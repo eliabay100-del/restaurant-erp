@@ -476,6 +476,15 @@ export async function markOrderServed(orderId: number) {
       },
     });
 
+    // Record stock usage (idempotent) so the ledger sees usage for dine-in,
+    // takeout and QR orders alike.
+    try {
+      const { recordUsageForOrder } = await import('@/server/services/reconciliation.service');
+      await recordUsageForOrder(orderId, order.shiftId);
+    } catch (e) {
+      console.error('recordUsageForOrder failed:', e);
+    }
+
     await emitOutboundEvent(prisma, 'order.status.changed', orderId, {
       orderId,
       newStatus: 'SERVED',

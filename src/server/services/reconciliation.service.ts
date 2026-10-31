@@ -47,7 +47,7 @@ export async function recordUsageForOrder(orderId: number, shiftId?: number) {
       select: {
         shiftId: true,
         staffId: true,
-        items: { select: { menuItemId: true, quantity: true } },
+        items: { where: { requiresTicket: true }, select: { menuItemId: true, quantity: true } },
       },
     }),
   ])
