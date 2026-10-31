@@ -1,19 +1,18 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { authorize, MANAGEMENT_ROLES } from '@/lib/auth';
+import { authorize, MANAGEMENT_ROLES, FLOOR_ROLES } from '@/lib/auth';
 import { ACTIVE_ORDER_STATUSES } from '@/lib/orderStatus';
 import { roundMoney } from '@/lib/money';
+import { businessDayStart, businessMonthStart, businessDayKey, businessHour } from '@/lib/time';
 
 export async function getDailySummary() {
   try {
     const auth = await authorize(MANAGEMENT_ROLES);
     if (!auth.ok) return { success: false, error: auth.error, data: null };
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const today = businessDayStart();
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
     const orders = await prisma.order.findMany({
       where: {
@@ -57,10 +56,8 @@ export async function getSalesByHour() {
     const auth = await authorize(MANAGEMENT_ROLES);
     if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const today = businessDayStart();
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
     const orders = await prisma.order.findMany({
       where: {
@@ -78,7 +75,7 @@ export async function getSalesByHour() {
     }));
 
     orders.forEach((order) => {
-      const hour = new Date(order.createdAt).getHours();
+      const hour = businessHour(new Date(order.createdAt));
       hourData[hour].total += order.total;
       hourData[hour].count += 1;
     });
@@ -112,10 +109,69 @@ export async function getRecentOrders(limit: number = 10) {
   }
 }
 
-export async function getShiftReports() {
+export async function getCashierBootstrap() {
+  try {
+    const auth = await authorize(FLOOR_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const [cats, items, unpaid, ready] = await Promise.all([
+      prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, nameEn: true, nameAm: true, icon: true, color: true } }),
+      prisma.menuItem.findMany({ where: { isAvailable: true }, orderBy: [{ category: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { nameEn: 'asc' }], select: { id: true, nameEn: true, nameAm: true, price: true, isAvailable: true, image: true, categoryId: true, kind: true, variants: { where: { isActive: true }, select: { id: true, nameEn: true, nameAm: true, priceOffset: true } } } }),
+      prisma.order.findMany({ where: { payment: null, status: { not: 'CANCELLED' } }, include: { items: true, staff: { select: { name: true, nameAm: true, role: true } } }, orderBy: { createdAt: 'desc' } }),
+      prisma.order.findMany({ where: { status: 'READY' }, include: { items: true, staff: { select: { name: true, nameAm: true } } }, orderBy: { createdAt: 'asc' } }),
+    ]);
+
+    return { success: true, categories: cats, items, unpaidOrders: unpaid, readyOrders: ready };
+  } catch (error) {
+    console.error('Get cashier bootstrap error:', error);
+    return { success: false, error: 'Failed to fetch cashier bootstrap' };
+  }
+}
+
+export async function getWaiterBootstrap() {
+  try {
+    const auth = await authorize(FLOOR_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const [cats, items, ready] = await Promise.all([
+      prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, nameEn: true, nameAm: true, icon: true, color: true } }),
+      prisma.menuItem.findMany({ where: { isAvailable: true }, orderBy: [{ category: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { nameEn: 'asc' }], select: { id: true, nameEn: true, nameAm: true, price: true, isAvailable: true, image: true, categoryId: true, kind: true, variants: { where: { isActive: true }, select: { id: true, nameEn: true, nameAm: true, priceOffset: true } } } }),
+      prisma.order.findMany({ where: { status: 'READY' }, include: { items: true, staff: { select: { name: true, nameAm: true } } }, orderBy: { createdAt: 'asc' } }),
+    ]);
+
+    return { success: true, categories: cats, items, readyOrders: ready };
+  } catch (error) {
+    console.error('Get waiter bootstrap error:', error);
+    return { success: false, error: 'Failed to fetch waiter bootstrap' };
+  }
+}
+
+export async function getOverviewData() {
   try {
     const auth = await authorize(MANAGEMENT_ROLES);
-    if (!auth.ok) return { success: false, error: auth.error, shifts: [] };
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const [summary, hourly, recent] = await Promise.all([
+      getDailySummary(),
+      getSalesByHour(),
+      getRecentOrders(10),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        summary: summary.success ? summary.data : null,
+        hourly: hourly.success ? hourly.data : [],
+        recent: recent.success ? recent.orders : [],
+      },
+    };
+  } catch (error) {
+    console.error('Get overview data error:', error);
+    return { success: false, error: 'Failed to fetch overview data' };
+  }
+}
+export async function getShiftReports() {
+  try {
 
     const shifts = await prisma.shift.findMany({
       orderBy: { startTime: 'desc' },

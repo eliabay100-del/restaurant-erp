@@ -2,16 +2,16 @@
 
 import { prisma } from '@/lib/prisma';
 import { authorize, MANAGEMENT_ROLES } from '@/lib/auth';
+import { roundMoney } from '@/lib/money';
+import { businessDayStart, businessDayFromInput, businessMonthStart, businessDayKey, businessHour } from '@/lib/time';
 
 export async function getDailyReport(date?: string) {
   try {
     const auth = await authorize(MANAGEMENT_ROLES);
     if (!auth.ok) return { success: false, error: auth.error };
 
-    const targetDate = date ? new Date(date) : new Date();
-    targetDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    const targetDate = date ? (businessDayFromInput(date) ?? new Date(date)) : businessDayStart();
+    const nextDay = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
 
     const [orders, payments] = await Promise.all([
       prisma.order.findMany({
@@ -27,7 +27,7 @@ export async function getDailyReport(date?: string) {
         orderBy: { createdAt: 'asc' },
       }),
       prisma.payment.findMany({
-        where: { createdAt: { gte: targetDate, lt: nextDay } },
+        where: { createdAt: { gte: targetDate, lt: nextDay }, amountPaid: { gt: 0 } },
       }),
     ]);
 
@@ -36,24 +36,31 @@ export async function getDailyReport(date?: string) {
     const cardRevenue = payments.filter(p => p.method === 'CARD').reduce((s, p) => s + p.amountDue, 0);
     const mobileRevenue = payments.filter(p => p.method === 'MOBILE').reduce((s, p) => s + p.amountDue, 0);
 
-    // Top selling items
-    const itemMap: Record<string, { nameEn: string; nameAm: string | null; qty: number; revenue: number }> = {};
-    for (const order of orders) {
-      for (const item of order.items) {
-        const key = item.itemNameEn;
-        if (!itemMap[key]) {
-          itemMap[key] = { nameEn: item.itemNameEn, nameAm: item.itemNameAm, qty: 0, revenue: 0 };
-        }
-        itemMap[key].qty += item.quantity;
-        itemMap[key].revenue += item.totalPrice;
-      }
-    }
-    const topItems = Object.values(itemMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
+    // Top selling items (SQL groupBy; exclude fee lines)
+    const feeItems = await prisma.menuItem.findMany({ where: { kind: 'FEE' }, select: { id: true } });
+    const feeIds = feeItems.map((f) => f.id);
+    const grouped = await prisma.orderItem.groupBy({
+      by: ['itemNameEn'],
+      where: {
+        order: { createdAt: { gte: targetDate, lt: nextDay }, status: { not: 'CANCELLED' } },
+        menuItemId: { notIn: feeIds.length ? feeIds : [0] },
+      },
+      _sum: { quantity: true, totalPrice: true },
+      _max: { itemNameAm: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 10,
+    });
+    const topItems = grouped.map((g) => ({
+      nameEn: g.itemNameEn,
+      nameAm: g._max.itemNameAm ?? null,
+      qty: g._sum.quantity ?? 0,
+      revenue: roundMoney(g._sum.totalPrice ?? 0),
+    }));
 
     // Hourly breakdown
     const hourlyMap: Record<number, number> = {};
     for (const p of payments) {
-      const hour = new Date(p.createdAt).getHours();
+      const hour = businessHour(new Date(p.createdAt));
       hourlyMap[hour] = (hourlyMap[hour] || 0) + p.amountDue;
     }
 
@@ -81,16 +88,14 @@ export async function getWeeklyReport() {
     const auth = await authorize(MANAGEMENT_ROLES);
     if (!auth.ok) return { success: false, error: auth.error };
 
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - 6);
-    weekStart.setHours(0, 0, 0, 0);
+    const today = businessDayStart();
+    const weekEnd = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const weekStart = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
 
-    const weekRange = { gte: weekStart, lte: today };
+    const weekRange = { gte: weekStart, lte: weekEnd };
 
     const payments = await prisma.payment.findMany({
-      where: { createdAt: weekRange },
+      where: { createdAt: weekRange, amountPaid: { gt: 0 } },
     });
 
     // Daily revenue for the week
@@ -98,10 +103,10 @@ export async function getWeeklyReport() {
     for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
-      dailyMap[d.toISOString().slice(0, 10)] = 0;
+      dailyMap[businessDayKey(d)] = 0;
     }
     for (const p of payments) {
-      const day = new Date(p.createdAt).toISOString().slice(0, 10);
+      const day = businessDayKey(new Date(p.createdAt));
       if (dailyMap[day] !== undefined) dailyMap[day] += p.amountDue;
     }
 
@@ -110,23 +115,30 @@ export async function getWeeklyReport() {
     const cardRevenue = payments.filter((p) => p.method === 'CARD').reduce((s, p) => s + p.amountDue, 0);
     const mobileRevenue = payments.filter((p) => p.method === 'MOBILE').reduce((s, p) => s + p.amountDue, 0);
 
-    const orders = await prisma.order.findMany({
+    const totalOrders = await prisma.order.count({
       where: { createdAt: weekRange, status: { not: 'CANCELLED' } },
-      include: { items: true },
     });
-    const totalOrders = orders.length;
 
-    // Top selling items this week
-    const itemMap: Record<string, { nameEn: string; nameAm: string | null; qty: number; revenue: number }> = {};
-    for (const order of orders) {
-      for (const item of order.items) {
-        const key = item.itemNameEn;
-        if (!itemMap[key]) itemMap[key] = { nameEn: item.itemNameEn, nameAm: item.itemNameAm, qty: 0, revenue: 0 };
-        itemMap[key].qty += item.quantity;
-        itemMap[key].revenue += item.totalPrice;
-      }
-    }
-    const topItems = Object.values(itemMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    // Top selling items this week (SQL groupBy, exclude fee lines)
+    const feeItems = await prisma.menuItem.findMany({ where: { kind: 'FEE' }, select: { id: true } });
+    const feeIds = feeItems.map((f) => f.id);
+    const grouped = await prisma.orderItem.groupBy({
+      by: ['itemNameEn'],
+      where: {
+        order: { createdAt: weekRange, status: { not: 'CANCELLED' } },
+        menuItemId: { notIn: feeIds.length ? feeIds : [0] },
+      },
+      _sum: { quantity: true, totalPrice: true },
+      _max: { itemNameAm: true },
+      orderBy: { _sum: { totalPrice: 'desc' } },
+      take: 10,
+    });
+    const topItems = grouped.map((g) => ({
+      nameEn: g.itemNameEn,
+      nameAm: g._max.itemNameAm ?? null,
+      qty: g._sum.quantity ?? 0,
+      revenue: roundMoney(g._sum.totalPrice ?? 0),
+    }));
 
     return {
       success: true,
@@ -152,10 +164,10 @@ export async function getMonthlyReport() {
     if (!auth.ok) return { success: false, error: auth.error };
 
     const today = new Date();
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStart = businessMonthStart(today);
 
     const payments = await prisma.payment.findMany({
-      where: { createdAt: { gte: monthStart, lte: today } },
+      where: { createdAt: { gte: monthStart, lte: today }, amountPaid: { gt: 0 } },
     });
 
     const totalRevenue = payments.reduce((s, p) => s + p.amountDue, 0);
@@ -167,21 +179,26 @@ export async function getMonthlyReport() {
       where: { createdAt: { gte: monthStart, lte: today }, status: { not: 'CANCELLED' } },
     });
 
-    // Top items this month
-    const orders = await prisma.order.findMany({
-      where: { createdAt: { gte: monthStart }, status: { not: 'CANCELLED' } },
-      include: { items: true },
+    // Top items this month (SQL groupBy, exclude fee lines)
+    const feeItems = await prisma.menuItem.findMany({ where: { kind: 'FEE' }, select: { id: true } });
+    const feeIds = feeItems.map((f) => f.id);
+    const grouped = await prisma.orderItem.groupBy({
+      by: ['itemNameEn'],
+      where: {
+        order: { createdAt: { gte: monthStart }, status: { not: 'CANCELLED' } },
+        menuItemId: { notIn: feeIds.length ? feeIds : [0] },
+      },
+      _sum: { quantity: true, totalPrice: true },
+      _max: { itemNameAm: true },
+      orderBy: { _sum: { totalPrice: 'desc' } },
+      take: 10,
     });
-    const itemMap: Record<string, { nameEn: string; nameAm: string | null; qty: number; revenue: number }> = {};
-    for (const order of orders) {
-      for (const item of order.items) {
-        const key = item.itemNameEn;
-        if (!itemMap[key]) itemMap[key] = { nameEn: item.itemNameEn, nameAm: item.itemNameAm, qty: 0, revenue: 0 };
-        itemMap[key].qty += item.quantity;
-        itemMap[key].revenue += item.totalPrice;
-      }
-    }
-    const topItems = Object.values(itemMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    const topItems = grouped.map((g) => ({
+      nameEn: g.itemNameEn,
+      nameAm: g._max.itemNameAm ?? null,
+      qty: g._sum.quantity ?? 0,
+      revenue: roundMoney(g._sum.totalPrice ?? 0),
+    }));
 
     return {
       success: true,
