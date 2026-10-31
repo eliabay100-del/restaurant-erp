@@ -46,6 +46,21 @@ export interface StudioCategory {
   isActive: boolean;
 }
 
+export type StudioTab = 'items' | 'categories' | 'prices';
+
+export interface StudioVariant {
+  id: number;
+  menuItemId: number;
+  nameEn: string;
+  nameAm: string | null;
+  priceOffset: number;
+  isActive: boolean;
+  scheduledIncrease: number;
+  scheduledIncreaseStart: number;
+  scheduledIncreaseEnd: number;
+  scheduledIncreaseEnabled: boolean;
+}
+
 export interface StudioItem {
   id: number;
   nameEn: string;
@@ -70,16 +85,5 @@ export interface StudioItem {
     icon: string | null;
     isActive: boolean;
   };
-  variants: {
-    id: number;
-    menuItemId: number;
-    nameEn: string;
-    nameAm: string | null;
-    priceOffset: number;
-    isActive: boolean;
-    scheduledIncrease: number;
-    scheduledIncreaseStart: number;
-    scheduledIncreaseEnd: number;
-    scheduledIncreaseEnabled: boolean;
-  }[];
+  variants: StudioVariant[];
 }

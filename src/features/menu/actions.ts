@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { authorize, ALL_ROLES, MANAGEMENT_ROLES } from '@/lib/auth';
+import { parseMoney } from '@/lib/money';
+import { fetchStudioCategories, fetchManagementMenuItems } from '@/server/services/menu.service';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -290,5 +292,137 @@ export async function updateCategory(
   } catch (error) {
     console.error('Update category error:', error);
     return { success: false, error: 'Failed to update category' };
+  }
+}
+
+
+export async function getStudioMenuData() {
+  try {
+    const auth = await authorize(MANAGEMENT_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error, categories: [], items: [] };
+
+    const [categories, items] = await Promise.all([
+      fetchStudioCategories(),
+      fetchManagementMenuItems(),
+    ]);
+    return { success: true, categories, items };
+  } catch (error) {
+    console.error('Get studio menu data error:', error);
+    return { success: false, error: 'Failed to fetch studio data', categories: [], items: [] };
+  }
+}
+
+
+export interface ScheduledPriceUpdate {
+  targetType: 'item' | 'variant';
+  id: number;
+  /** Fixed increase in ETB, converted to santim on the server. */
+  amountEtb: number;
+  startMinute: number;
+  endMinute: number;
+  enabled: boolean;
+}
+
+/**
+ * Save per-item / per-size daily price increases.
+ *
+ * Each target has its own amount and window. Existing orders keep their price
+ * snapshots; only future menu reads and order creation use the new values.
+ */
+export async function updateScheduledPriceIncreases(updates: ScheduledPriceUpdate[]) {
+  try {
+    const auth = await authorize(MANAGEMENT_ROLES);
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return { success: false, error: 'No price changes to save' };
+    }
+
+    const itemIds: number[] = [];
+    const variantIds: number[] = [];
+    const normalized = updates.map((update) => {
+      const id = Number(update.id);
+      const startMinute = Number(update.startMinute);
+      const endMinute = Number(update.endMinute);
+      const amount = parseMoney(update.amountEtb);
+
+      if (update.targetType !== 'item' && update.targetType !== 'variant') {
+        throw new Error('Invalid price target');
+      }
+      if (!Number.isInteger(id) || id <= 0) throw new Error('Invalid price target');
+      if (!Number.isInteger(startMinute) || startMinute < 0 || startMinute > 1439) {
+        throw new Error('Invalid start time');
+      }
+      if (!Number.isInteger(endMinute) || endMinute < 0 || endMinute > 1439) {
+        throw new Error('Invalid end time');
+      }
+      if (startMinute === endMinute) throw new Error('Start and end times must be different');
+      if (amount === null || amount < 0) throw new Error('Increase must be zero or more');
+
+      if (update.targetType === 'item') itemIds.push(id);
+      else variantIds.push(id);
+
+      return {
+        targetType: update.targetType,
+        id,
+        scheduledIncrease: amount,
+        scheduledIncreaseStart: startMinute,
+        scheduledIncreaseEnd: endMinute,
+        scheduledIncreaseEnabled: Boolean(update.enabled),
+      };
+    });
+
+    const uniqueItemIds = [...new Set(itemIds)];
+    const uniqueVariantIds = [...new Set(variantIds)];
+
+    const [items, variants] = await Promise.all([
+      uniqueItemIds.length > 0
+        ? prisma.menuItem.findMany({
+            where: { id: { in: uniqueItemIds } },
+            select: { id: true, kind: true },
+          })
+        : Promise.resolve([]),
+      uniqueVariantIds.length > 0
+        ? prisma.menuVariant.findMany({
+            where: { id: { in: uniqueVariantIds } },
+            select: { id: true, menuItem: { select: { kind: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    if (items.length !== uniqueItemIds.length || variants.length !== uniqueVariantIds.length) {
+      return { success: false, error: 'One or more menu items no longer exist' };
+    }
+    if (items.some((item) => item.kind !== 'PRODUCT') || variants.some((variant) => variant.menuItem.kind !== 'PRODUCT')) {
+      return { success: false, error: 'Fee items cannot have a scheduled increase' };
+    }
+
+    await prisma.$transaction(
+      normalized.map((update) =>
+        update.targetType === 'item'
+          ? prisma.menuItem.update({
+              where: { id: update.id },
+              data: {
+                scheduledIncrease: update.scheduledIncrease,
+                scheduledIncreaseStart: update.scheduledIncreaseStart,
+                scheduledIncreaseEnd: update.scheduledIncreaseEnd,
+                scheduledIncreaseEnabled: update.scheduledIncreaseEnabled,
+              },
+            })
+          : prisma.menuVariant.update({
+              where: { id: update.id },
+              data: {
+                scheduledIncrease: update.scheduledIncrease,
+                scheduledIncreaseStart: update.scheduledIncreaseStart,
+                scheduledIncreaseEnd: update.scheduledIncreaseEnd,
+                scheduledIncreaseEnabled: update.scheduledIncreaseEnabled,
+              },
+            }),
+      ),
+    );
+
+    return { success: true, updated: normalized.length };
+  } catch (error) {    console.error('Update scheduled price increases error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to save price changes' };
   }
 }
