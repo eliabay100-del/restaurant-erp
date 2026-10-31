@@ -146,6 +146,7 @@ function computePeriod(
 
 export default function ReconciliationPage() {
   const t = useTranslations('reconciliation');
+  const shortName = (en: string, am: string | null) => (getLocaleName(en, am, locale) || '').trim().split(/\s+/).pop() || getLocaleName(en, am, locale);
   const locale = useLocale();
 
   const [tab, setTab] = useState<Tab>('recipes');
@@ -442,9 +443,9 @@ export default function ReconciliationPage() {
               onClick={() => selectMenu(menu.id)}
             >
               <span style={{ display: 'grid', gap: 2 }}>
-                <span>{getLocaleName(menu.nameEn, menu.nameAm, locale)}</span>
+                <span>{shortName(menu.nameEn, menu.nameAm)}</span>
                 <span style={{ fontSize: 11, opacity: 0.75 }}>
-                  {getLocaleName(menu.category.nameEn, menu.category.nameAm, locale)}
+                  {shortName(menu.category.nameEn, menu.category.nameAm)}
                   {menu.ingredients.length > 0 ? ` · ${menu.ingredients.length} ${t('recipes.existing')}` : ''}
                 </span>
               </span>
@@ -463,9 +464,9 @@ export default function ReconciliationPage() {
           </div>
         ) : (
           <>
-            <div className="page-title" style={{ fontSize: '1.15rem' }}>{getLocaleName(selectedMenu.nameEn, selectedMenu.nameAm, locale)}</div>
+            <div className="page-title" style={{ fontSize: '1.15rem' }}>{shortName(selectedMenu.nameEn, selectedMenu.nameAm)}</div>
             <div className="text-muted" style={{ fontSize: 12, marginBottom: 'var(--space-4)' }}>
-              {getLocaleName(selectedMenu.category.nameEn, selectedMenu.category.nameAm, locale)} · {t('recipes.intro')}
+              {shortName(selectedMenu.category.nameEn, selectedMenu.category.nameAm)} · {t('recipes.intro')}
             </div>
 
             <div className="section-title" style={{ marginBottom: 'var(--space-2)' }}>{t('recipes.existing')}</div>
@@ -488,10 +489,10 @@ export default function ReconciliationPage() {
                     }}
                   >
                     <div style={{ display: 'grid', gap: 2 }}>
-                      <span style={{ fontWeight: 600 }}>{getLocaleName(ing.stockNameEn, ing.stockNameAm, locale)}</span>
+                      <span style={{ fontWeight: 600 }}>{shortName(ing.stockNameEn, ing.stockNameAm)}</span>
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                         {ing.yieldStockQuantity && ing.yieldUnits
-                          ? `${ing.yieldStockQuantity} ${ing.unit} → ${ing.yieldUnits} × ${getLocaleName(selectedMenu.nameEn, selectedMenu.nameAm, locale)}`
+                          ? `${ing.yieldStockQuantity} ${ing.unit} → ${ing.yieldUnits} × ${shortName(selectedMenu.nameEn, selectedMenu.nameAm)}`
                           : `${ing.perUnit} ${ing.unit} / ${t('recipes.perUnit')}`}
                         {' · '}
                         {ing.exactPerUnit.toFixed(2)} {ing.unit} / {t('recipes.perUnit')}
@@ -521,7 +522,7 @@ export default function ReconciliationPage() {
                   <option value="">{t('common.none')}</option>
                   {inventoryItems.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {getLocaleName(item.nameEn, item.nameAm, locale)} ({item.unit}) · {item.currentStock} {item.unit}
+                      {shortName(item.nameEn, item.nameAm)} ({item.unit}) · {item.currentStock} {item.unit}
                     </option>
                   ))}
                 </select>
@@ -531,7 +532,7 @@ export default function ReconciliationPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--accent-gold)' }}>
                   <span>
                     {t('recipes.editing')}
-                    {selectedStock ? `: ${getLocaleName(selectedStock.nameEn, selectedStock.nameAm, locale)}` : ''}
+                    {selectedStock ? `: ${shortName(selectedStock.nameEn, selectedStock.nameAm)}` : ''}
                   </span>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={cancelEdit}>
                     {t('recipes.cancel')}
@@ -640,7 +641,7 @@ export default function ReconciliationPage() {
                 {board.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{getLocaleName(item.nameEn, item.nameAm, locale)}</div>
+                      <div style={{ fontWeight: 600 }}>{shortName(item.nameEn, item.nameAm)}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.unit}</div>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums' }}>{item.currentStock} {item.unit}</td>
@@ -744,7 +745,7 @@ export default function ReconciliationPage() {
                     return (
                       <tr key={row.id}>
                         <td>
-                          <div style={{ fontWeight: 600 }}>{getLocaleName(row.nameEn, row.nameAm, locale)}</div>
+                          <div style={{ fontWeight: 600 }}>{shortName(row.nameEn, row.nameAm)}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.unit}</div>
                         </td>
                         <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.assigned} {row.unit}</td>
@@ -811,7 +812,7 @@ export default function ReconciliationPage() {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--space-2)' }}>
                     {order.items.map((item, idx) => (
                       <span key={`${order.id}-item-${idx}`} className="badge badge-preparing">
-                        {item.quantity} × {getLocaleName(item.nameEn, item.nameAm, locale)}
+                        {item.quantity} × {shortName(item.nameEn, item.nameAm)}
                       </span>
                     ))}
                   </div>
@@ -832,7 +833,7 @@ export default function ReconciliationPage() {
                             fontWeight: 600,
                           }}
                         >
-                          {line.quantity} {line.unit} {getLocaleName(line.nameEn, line.nameAm, locale)}
+                          {line.quantity} {line.unit} {shortName(line.nameEn, line.nameAm)}
                         </span>
                       ))
                     )}
