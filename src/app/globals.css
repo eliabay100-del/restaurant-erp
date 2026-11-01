@@ -992,22 +992,6 @@ a:hover {
   animation: slideInRight var(--transition-slow) ease;
 }
 
-.toast-success {
-  border-left: 3px solid var(--success);
-}
-
-.toast-error {
-  border-left: 3px solid var(--danger);
-}
-
-.toast-warning {
-  border-left: 3px solid var(--warning);
-}
-
-.toast-info {
-  border-left: 3px solid var(--info);
-}
-
 /* ============ POS-SPECIFIC LAYOUTS ============ */
 .pos-layout {
   display: flex;

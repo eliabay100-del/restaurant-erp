@@ -601,11 +601,11 @@ export default function ReconciliationPage() {
       {renderPeriodControls()}
 
       <div className="kpi-grid" style={{ marginBottom: 'var(--space-4)' }}>
-        <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-emerald)' }}>
+        <div className="stat-card">
           <div className="stat-card-label">{t('assign.itemsAssigned')}</div>
           <div className="stat-card-value">{assignmentSummary.items}</div>
         </div>
-        <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-blue)' }}>
+        <div className="stat-card">
           <div className="stat-card-label">{t('assign.inventoryItems')}</div>
           <div className="stat-card-value">{board.length}</div>
         </div>
@@ -694,15 +694,15 @@ export default function ReconciliationPage() {
         {renderPeriodControls()}
 
         <div className="kpi-grid" style={{ marginBottom: 'var(--space-4)' }}>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-gold)' }}>
+          <div className="stat-card">
             <div className="stat-card-label">{t('settlement.orders')}</div>
             <div className="stat-card-value">{totals.orders}</div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-blue)' }}>
+          <div className="stat-card">
             <div className="stat-card-label">{t('settlement.itemsAssigned')}</div>
             <div className="stat-card-value">{totals.assignedItems}</div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-emerald)' }}>
+          <div className="stat-card">
             <div className="stat-card-label">{t('settlement.itemsUsed')}</div>
             <div className="stat-card-value">{totals.expectedItems}</div>
           </div>

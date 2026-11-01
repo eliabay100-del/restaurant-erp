@@ -94,7 +94,7 @@ export default function EndShiftModal({ shiftId, onClose, onComplete }: EndShift
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('countedCash')}</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{formatPrice(result.closingCash || 0)}</div>
               </div>
-              <div style={{ padding: 'var(--space-3)', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', gridColumn: '1 / -1', borderLeft: `3px solid ${diffColor}` }}>
+              <div style={{ padding: 'var(--space-3)', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', gridColumn: '1 / -1' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('difference')}</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, color: diffColor }}>
                   {result.difference > 0 ? '+' : ''}{formatPrice(result.difference)}

@@ -198,7 +198,7 @@ export default function EmployeesPage() {
 
                     {/* Bank info */}
                     {(emp.bankName || emp.bankAccount) && (
-                      <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--accent-blue)', fontSize: '0.8125rem' }}>
+                      <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', fontSize: '0.8125rem' }}>
                         {emp.bankName && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon name="bank" size={14} /> <strong>{emp.bankName}</strong></span>}
                         {emp.bankAccount && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon name="hash" size={14} /> {emp.bankAccount}</span>}
                       </div>
@@ -212,7 +212,7 @@ export default function EmployeesPage() {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
-                      <div style={{ background: 'var(--bg-card)', padding: 'var(--space-3)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--danger)' }}>
+                      <div style={{ background: 'var(--bg-card)', padding: 'var(--space-3)', borderRadius: 'var(--radius-sm)' }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}><Icon name="calendar" size={13} /> Absent Days</label>
                         <input className="input" type="number" min="0" max="30" value={payForm.absentDays} onChange={(e) => setPayForm({ ...payForm, absentDays: e.target.value })} />
                         {absentDays > 0 && (

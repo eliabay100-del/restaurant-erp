@@ -111,7 +111,7 @@ export default function ShiftsPage() {
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('countedCash')}</div>
                       <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{formatPrice(shift.closingCash, locale)}</div>
                     </div>
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${diffColor}` }}>
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('difference')}</div>
                       <div style={{ fontSize: '1.25rem', fontWeight: 700, color: diffColor }}>
                         {shift.difference !== null ? (shift.difference > 0 ? '+' : '') + formatPrice(shift.difference, locale) : '—'}

@@ -55,7 +55,7 @@ export default function OverviewPage() {
       {/* Stat Cards */}
       <div className="kpi-grid" style={{ marginBottom: 'var(--space-6)' }}>
         {statCards.map((card) => (
-          <div key={card.label} className="stat-card" style={{ borderLeft: `3px solid ${card.color}` }}>
+          <div key={card.label} className="stat-card">
             <div className="stat-card-label"><Icon name={card.icon} size={14} /> {card.label}</div>
             <div className="stat-card-value" style={{ color: card.color }}>{card.value}</div>
           </div>

@@ -368,7 +368,6 @@ export default function MenuManagementPage() {
                 className="glass-card-static"
                 style={{
                   padding: 'var(--space-3)', opacity: item.isAvailable ? 1 : 0.5,
-                  borderLeft: `3px solid ${item.category?.color || 'var(--accent-emerald)'}`,
                   display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
                 }}
               >

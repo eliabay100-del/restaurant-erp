@@ -93,19 +93,19 @@ export default function InventoryPage() {
       {/* Summary Cards */}
       {summary && (
         <div className="kpi-grid" style={{ marginBottom: 'var(--space-5)' }}>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-blue)' }}>
+          <div className="stat-card">
             <div className="stat-card-label"><Icon name="inventory" size={14} /> {t('totalItems')}</div>
             <div className="stat-card-value" style={{ color: 'var(--accent-blue)' }}>{summary.totalItems}</div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--accent-gold)' }}>
+          <div className="stat-card">
             <div className="stat-card-label"><Icon name="coins" size={14} /> {t('totalValue')}</div>
             <div className="stat-card-value" style={{ color: 'var(--accent-gold)' }}>{formatPrice(summary.totalValue, locale)}</div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--warning)' }}>
+          <div className="stat-card">
             <div className="stat-card-label"><Icon name="alertTriangle" size={14} /> {t('lowStock')}</div>
             <div className="stat-card-value" style={{ color: 'var(--warning)' }}>{summary.lowStockCount}</div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--danger)' }}>
+          <div className="stat-card">
             <div className="stat-card-label"><Icon name="xCircle" size={14} /> {t('outOfStock')}</div>
             <div className="stat-card-value" style={{ color: 'var(--danger)' }}>{summary.outOfStockCount}</div>
           </div>
